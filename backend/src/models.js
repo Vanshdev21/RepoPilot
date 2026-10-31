@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const userSchema = new Schema({ githubId: {type:Number, required:true, unique:true}, username:String, name:String, avatarUrl:String, githubAccessToken:String }, {timestamps:true});
-const repositorySchema = new Schema({ connectedBy:{type:Schema.Types.ObjectId, ref:'User', required:true}, githubRepositoryId:Number, owner:String, name:String, fullName:String, htmlUrl:String, defaultBranch:String, primaryLanguage:String, description:String, visibility:{type:String, default:'public'}, readmeSummary:String, monitoringEnabled:{type:Boolean, default:false}, webhookId:Number, autoApprove:{type:Boolean, default:false}, indexingStatus:{type:String, default:'pending', enum:['pending','running','completed','failed']} }, {timestamps:true});
+const repositorySchema = new Schema({ connectedBy:{type:Schema.Types.ObjectId, ref:'User', required:true}, githubRepositoryId:Number, owner:String, name:String, fullName:String, htmlUrl:String, defaultBranch:String, primaryLanguage:String, description:String, visibility:{type:String, default:'public'}, readmeSummary:String, monitoringEnabled:{type:Boolean, default:false}, webhookId:Number, autoApprove:{type:Boolean, default:false}, lastSeenIssueNumber:{type:Number, default:0}, indexingStatus:{type:String, default:'pending', enum:['pending','running','completed','failed']} }, {timestamps:true});
 repositorySchema.index({connectedBy:1, githubRepositoryId:1}, {unique:true});
 
 const runSchema = new Schema({

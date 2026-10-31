@@ -8,6 +8,10 @@ const crypto = require("crypto");
 const session = require("express-session");
 const MongoStore = require("connect-mongo").default;
 const { getGeminiAnalysis, answerRepositoryQuestion, loadRepositoryContext, cloneAndTest, publishToGitHub, hash } = require("./services/agentService");
+const { registerRepositoryRoutes } = require('./routes/repositories');
+const { registerAgentRoutes } = require('./routes/agent');
+const { registerChatRoutes } = require('./routes/chat');
+const { state: runtimeState } = require('./runtime');
 
 const {
   User,
@@ -178,6 +182,9 @@ const parseRepo = (url) => {
   }
 };
 
+registerRepositoryRoutes(app, withAuth);
+registerAgentRoutes(app, withAuth);
+registerChatRoutes(app, withAuth);
 app.get("/api/health", (_req, res) =>
   ok(res, { status: "healthy", database: dbReady ? "connected" : "memory" }),
 );
@@ -407,7 +414,8 @@ app.post("/api/repositories/:id/monitor", withAuth, async (req, res, next) => {
     const callbackUrl = process.env.GITHUB_WEBHOOK_URL || `${process.env.API_PUBLIC_URL || "http://localhost:8001"}/api/webhooks/github`;
     const secret = process.env.GITHUB_WEBHOOK_SECRET;
     if (!secret) return fail(res, 503, "WEBHOOK_NOT_CONFIGURED", "GITHUB_WEBHOOK_SECRET is not configured on the backend.");
-    if (!repo.webhookId) {
+    const callbackIsPublic = callbackUrl && !callbackUrl.includes('localhost') && !callbackUrl.includes('127.0.0.1');
+    if (callbackIsPublic && !repo.webhookId) {
       const hooks = await github(`/repos/${repo.fullName}/hooks`, req.session.githubToken);
       const existing = hooks.find(hook => hook.config?.url === callbackUrl);
       if (existing) repo.webhookId = existing.id;
@@ -418,8 +426,12 @@ app.post("/api/repositories/:id/monitor", withAuth, async (req, res, next) => {
     }
     repo.monitoringEnabled = true;
     repo.autoApprove = req.body.autoApprove === true;
+    if (!repo.lastSeenIssueNumber) {
+      const issues = await github(`/repos/${repo.fullName}/issues?state=all&sort=created&direction=desc&per_page=1`, req.session.githubToken);
+      repo.lastSeenIssueNumber = issues[0]?.number || 0;
+    }
     await repo.save();
-    ok(res, { monitoringEnabled: true, webhookId: repo.webhookId, autoApprove: repo.autoApprove });
+    ok(res, { monitoringEnabled: true, webhookId: repo.webhookId || null, mode: callbackIsPublic && repo.webhookId ? 'webhook' : 'polling', autoApprove: repo.autoApprove });
   } catch (error) { next(error); }
 });
 
@@ -617,6 +629,26 @@ app.use((err, _req, res, _next) => {
   return fail(res, 502, "UPSTREAM_ERROR", err.message || "The upstream service could not complete the request.");
 });
 
+async function pollMonitoredRepositories() {
+  if (!dbReady) return;
+  try {
+    const repositories = await Repository.find({ monitoringEnabled: true });
+    for (const repository of repositories) {
+      const owner = await User.findById(repository.connectedBy);
+      if (!owner?.githubAccessToken) continue;
+      const issues = await github(`/repos/${repository.fullName}/issues?state=open&sort=created&direction=asc&per_page=100`, owner.githubAccessToken);
+      const newIssues = issues.filter(issue => !issue.pull_request && issue.number > (repository.lastSeenIssueNumber || 0));
+      for (const issue of newIssues) await processIssueWebhook(repository.fullName, issue).catch(error => console.error(`Issue agent failed for #${issue.number}:`, error.message));
+      const highestIssue = Math.max(repository.lastSeenIssueNumber || 0, ...newIssues.map(issue => issue.number));
+      if (highestIssue !== (repository.lastSeenIssueNumber || 0)) {
+        repository.lastSeenIssueNumber = highestIssue;
+        await repository.save();
+      }
+    }
+  } catch (error) { console.warn('Repository issue polling paused:', error.message); }
+}
+setInterval(pollMonitoredRepositories, 60 * 1000);
+
 (async () => {
   if (process.env.DB_URL) {
     try {
@@ -624,6 +656,7 @@ app.use((err, _req, res, _next) => {
         serverSelectionTimeoutMS: 6000,
       });
       dbReady = true;
+      runtimeState.dbReady = true;
       console.log("MongoDB connected");
     } catch (e) {
       console.warn("MongoDB unavailable; using memory mode:", e.message);
