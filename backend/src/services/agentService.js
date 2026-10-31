@@ -25,7 +25,7 @@ function buildRepositoryFallback(repository, question, files) {
 async function answerRepositoryQuestion(repository, question, files, githubToken) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
   const context = files.map(file => `FILE ${file.path}\n${file.content.slice(0, 12000)}`).join('\n\n');
   const prompt = `You are RepoPilot's repository engineering assistant. Answer from the supplied repository context only. Repository: ${repository.fullName}. Explain architecture, code behavior, tech stack, dependencies, and tradeoffs clearly. Admit when the repository context is insufficient.\n\nRepository context:\n${context}\n\nUser question:\n${question}`;
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -54,7 +54,7 @@ async function runCommand(command, args, options = {}) {
 async function getGeminiAnalysis(issue, files, repository) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
   const prompt = `You are a senior software engineer fixing a GitHub issue. Respond with valid JSON only.
 Repository: ${repository.fullName}
 Issue #${issue.number}: ${issue.title}
