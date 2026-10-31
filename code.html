@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+
+<html class="dark scroll-smooth" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="web_standard" name="shell-type"/>
+<title>RepoPilot — The AI Engineering Agent for Open Source</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            canvas: "#08090D",
+            surface: "#101219",
+            panel: "#161922",
+            panelHigh: "#1E2230",
+            electric: "#4F8CFF",
+            violet: "#8B5CF6",
+            cyan: "#42D9E8",
+            emeraldVerified: "#65D69A",
+            chalk: "#F5F5F7",
+            muted: "#9296A5",
+            borderMuted: "rgba(255, 255, 255, 0.08)",
+            borderBright: "rgba(255, 255, 255, 0.16)"
+          },
+          fontFamily: {
+            sans: ["Geist", "sans-serif"],
+            mono: ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    }
+  </script>
+<style>
+    @layer base {
+      html, body {
+        background-color: #08090D;
+        color: #F5F5F7;
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+      }
+    }
+    
+    /* Glowing animated lines */
+    @keyframes pulseFlow {
+      0% { stroke-dashoffset: 120; }
+      100% { stroke-dashoffset: 0; }
+    }
+    .animate-flow {
+      stroke-dasharray: 8 14;
+      animation: pulseFlow 2.8s linear infinite;
+    }
+    .animate-flow-fast {
+      stroke-dasharray: 6 10;
+      animation: pulseFlow 1.6s linear infinite;
+    }
+    
+    /* Subtle float animations */
+    @keyframes subtleFloat {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-8px); }
+    }
+    .animate-float-slow {
+      animation: subtleFloat 6s ease-in-out infinite;
+    }
+    .animate-float-delay {
+      animation: subtleFloat 7s ease-in-out 1.5s infinite;
+    }
+
+    /* Ambient pulse glow */
+    @keyframes glowPulse {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50% { opacity: 0.65; transform: scale(1.08); }
+    }
+    .animate-glow {
+      animation: glowPulse 5s ease-in-out infinite;
+    }
+
+    /* Architectural grid background */
+    .bg-grid {
+      background-size: 56px 56px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    }
+    .bg-radial-fade {
+      mask-image: radial-gradient(ellipse 65% 55% at 50% 50%, #000 60%, transparent 100%);
+      -webkit-mask-image: radial-gradient(ellipse 65% 55% at 50% 50%, #000 60%, transparent 100%);
+    }
+  </style>
+</head>
+<body class="bg-canvas text-chalk font-sans antialiased selection:bg-electric selection:text-canvas">
+<!-- FLOATING MINIMAL NAVIGATION DOCK -->
+<header class="fixed top-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+<nav class="pointer-events-auto flex items-center justify-between gap-6 px-4 py-2.5 rounded-full bg-surface/80 backdrop-blur-xl border border-borderMuted shadow-[0_12px_40px_rgba(0,0,0,0.6)] w-full max-w-4xl transition-all">
+<!-- RepoPilot Brand Vector Mark -->
+<a class="flex items-center gap-2.5 group" href="#">
+<div class="relative w-8 h-8 rounded-lg bg-panel flex items-center justify-center border border-borderMuted group-hover:border-electric/50 transition-colors shadow-[0_0_12px_rgba(79,140,255,0.15)]">
+<svg class="text-electric group-hover:scale-110 transition-transform" fill="none" height="18" viewbox="0 0 24 24" width="18">
+<circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="2"></circle>
+<circle cx="18" cy="18" r="3" stroke="currentColor" stroke-width="2"></circle>
+<path d="M6 9v3a3 3 0 003 3h6" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+<path d="M14 12l4 3-4 3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div class="flex items-baseline gap-1.5">
+<span class="font-sans font-semibold tracking-tight text-chalk text-base">RepoPilot</span>
+<span class="font-mono text-[10px] text-cyan uppercase tracking-widest px-1.5 py-0.5 rounded bg-cyan/10 border border-cyan/20">v2.4</span>
+</div>
+</a>
+<!-- Menu links -->
+<div class="hidden md:flex items-center gap-7 text-xs font-mono tracking-wider uppercase text-muted">
+<a class="hover:text-chalk transition-colors" href="#product">Product</a>
+<a class="hover:text-chalk transition-colors" href="#story">Triage</a>
+<a class="hover:text-chalk transition-colors" href="#workflow">Workflow</a>
+<a class="hover:text-chalk transition-colors" href="#evidence">Evidence</a>
+<a class="hover:text-chalk transition-colors" href="#architecture">Architecture</a>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-3">
+<a class="hidden sm:flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full bg-panel hover:bg-panelHigh border border-borderMuted text-muted hover:text-chalk transition-colors" href="https://github.com" rel="noreferrer" target="_blank">
+<svg class="w-3.5 h-3.5 fill-current" viewbox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
+<span>★ 8.4k</span>
+</a>
+<a class="group relative inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-chalk text-canvas font-mono text-xs font-semibold hover:bg-white transition-all shadow-[0_0_20px_rgba(245,245,247,0.3)] hover:shadow-[0_0_25px_rgba(245,245,247,0.5)]" href="#product">
+<span>Launch RepoPilot</span>
+<span class="group-hover:translate-x-0.5 transition-transform">→</span>
+</a>
+</div>
+</nav>
+</header>
+<!-- HERO SECTION -->
+<section class="relative min-h-screen pt-32 pb-24 flex flex-col justify-between overflow-hidden bg-canvas" id="product">
+<!-- Atmospheric vector glow meshes -->
+<div class="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[520px] bg-electric/15 blur-[160px] rounded-full -z-10 animate-glow"></div>
+<div class="pointer-events-none absolute top-1/3 -right-32 w-[600px] h-[400px] bg-violet/10 blur-[180px] rounded-full -z-10"></div>
+<div class="pointer-events-none absolute top-1/2 -left-40 w-[600px] h-[400px] bg-cyan/10 blur-[180px] rounded-full -z-10"></div>
+<div class="max-w-7xl mx-auto px-6 lg:px-8 w-full">
+<!-- Eyebrow & Live Sentinel status -->
+<div class="flex flex-wrap items-center justify-between gap-4 pb-6 pt-4 border-b border-borderMuted/60">
+<div class="inline-flex items-center gap-2 font-mono text-[11px] tracking-widest text-cyan uppercase">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-cyan"></span>
+</span>
+          The AI Engineering Agent for Open Source
+        </div>
+<div class="hidden sm:flex items-center gap-4 font-mono text-[11px] text-muted tracking-wider">
+<span class="text-chalk/80">GEMMA 4 ORCHESTRATION</span>
+<span class="text-borderBright">//</span>
+<span class="text-emeraldVerified">DOCKER MICRO-VMS ISOLATED</span>
+<span class="text-borderBright">//</span>
+<span>DETERMINISTIC VERIFICATION</span>
+</div>
+</div>
+<!-- Main Editorial Headline Split -->
+<div class="pt-10 pb-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
+<div class="lg:col-span-8">
+<h1 class="text-5xl sm:text-7xl lg:text-[5.4rem] font-bold tracking-[-0.04em] leading-[1.02] text-chalk font-sans">
+            From issue to <br/>
+<span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400">impact.</span>
+</h1>
+<p class="mt-6 text-lg sm:text-xl text-muted max-w-2xl font-normal leading-relaxed">
+            Meet your autonomous engineering teammate. RepoPilot investigates GitHub issues, deciphers unfamiliar codebases, generates surgical unified diffs, runs test suites in hermetic Docker containers, and prepares verifiable pull requests for maintainer sign-off.
+          </p>
+</div>
+<div class="lg:col-span-4 flex flex-col items-start lg:items-end justify-end gap-5">
+<div class="flex flex-wrap items-center gap-3">
+<a class="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-electric to-violet text-chalk font-mono text-xs font-semibold uppercase tracking-wider hover:opacity-95 transition-all shadow-[0_0_30px_rgba(79,140,255,0.4)] active:scale-95" href="#workflow">
+<span>Explore the workflow</span>
+<span class="text-sm">→</span>
+</a>
+<a class="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-panel hover:bg-panelHigh border border-borderMuted hover:border-borderBright text-chalk font-mono text-xs tracking-wider transition-all" href="https://github.com" rel="noreferrer" target="_blank">
+<span>View on GitHub</span>
+<span class="text-muted">↗</span>
+</a>
+</div>
+<div class="font-mono text-[11px] text-muted/70 tracking-tight flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-electric"></span>
+<span>Zero installation · Powered by Gemma 4 · GitHub · Docker</span>
+</div>
+</div>
+</div>
+<!-- SIGNATURE BESPOKE 2D HERO ARTWORK (VECTORED TRANSFORMATION NARRATIVE) -->
+<div class="relative w-full rounded-2xl bg-surface/90 border border-borderMuted p-4 sm:p-8 shadow-[0_20px_80px_rgba(0,0,0,0.8)] overflow-hidden">
+<!-- Architectural Header of the Canvas -->
+<div class="flex items-center justify-between border-b border-borderMuted/80 pb-4 mb-6 font-mono text-xs">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-red-500/30 border border-red-500/60"></span>
+<span class="w-2.5 h-2.5 rounded-full bg-yellow-500/30 border border-yellow-500/60"></span>
+<span class="w-2.5 h-2.5 rounded-full bg-emeraldVerified/30 border border-emeraldVerified/60"></span>
+<span class="ml-3 text-muted tracking-wider">// PIPELINE_VISUALIZER: ISSUE_128 → SYNTHESIS → VERIFIED_PR_129</span>
+</div>
+<div class="hidden sm:flex items-center gap-3 text-[11px] text-muted">
+<span class="text-cyan flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-cyan animate-pulse"></span>AST_ONLINE
+            </span>
+<span class="text-borderBright">|</span>
+<span class="text-emeraldVerified">DOCKER_SANDBOX_READY</span>
+</div>
+</div>
+<!-- 2D Transformation Stage: Issue → Agentic Engine → Verified Diff & PR -->
+<div class="relative min-h-[460px] lg:min-h-[500px] w-full flex items-center justify-center overflow-hidden">
+<!-- Background SVG Circuit with Animated Pulsing Flow Beads -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" fill="none" preserveaspectratio="xMidYMid meet" viewbox="0 0 1000 500">
+<defs>
+<lineargradient id="flowGrad1" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#4F8CFF" stop-opacity="0.2"></stop>
+<stop offset="50%" stop-color="#8B5CF6" stop-opacity="0.8"></stop>
+<stop offset="100%" stop-color="#42D9E8" stop-opacity="0.4"></stop>
+</lineargradient>
+<lineargradient id="flowGrad2" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.3"></stop>
+<stop offset="50%" stop-color="#42D9E8" stop-opacity="0.9"></stop>
+<stop offset="100%" stop-color="#65D69A" stop-opacity="0.8"></stop>
+</lineargradient>
+<pattern height="20" id="gridDot" patternunits="userSpaceOnUse" width="20">
+<circle cx="2" cy="2" fill="rgba(255,255,255,0.08)" r="0.75"></circle>
+</pattern>
+</defs>
+<!-- Background Micro-Dots -->
+<rect fill="url(#gridDot)" height="500" width="1000"></rect>
+<!-- Pathway 1: From Left Issue Card into Central Engine Core -->
+<path d="M 230 250 C 330 250, 360 250, 430 250" stroke="rgba(79, 140, 255, 0.2)" stroke-width="2"></path>
+<path class="animate-flow" d="M 230 250 C 330 250, 360 250, 430 250" stroke="url(#flowGrad1)" stroke-width="2.5"></path>
+<!-- Secondary Branching Input Lines -->
+<path d="M 220 160 C 310 160, 350 220, 430 240" stroke="rgba(139, 92, 246, 0.2)" stroke-width="1.5"></path>
+<path class="animate-flow-fast" d="M 220 160 C 310 160, 350 220, 430 240" stroke="#8B5CF6" stroke-width="1.5"></path>
+<path d="M 220 340 C 310 340, 350 280, 430 260" stroke="rgba(66, 217, 232, 0.2)" stroke-width="1.5"></path>
+<path class="animate-flow" d="M 220 340 C 310 340, 350 280, 430 260" stroke="#42D9E8" stroke-width="1.5"></path>
+<!-- Pathway 2: From Central Core into Right Verified Artifacts -->
+<path d="M 570 250 C 650 250, 680 250, 760 250" stroke="rgba(66, 217, 232, 0.25)" stroke-width="2"></path>
+<path class="animate-flow" d="M 570 250 C 650 250, 680 250, 760 250" stroke="url(#flowGrad2)" stroke-width="2.5"></path>
+<!-- Secondary Branching Output Lines -->
+<path d="M 570 240 C 650 220, 690 160, 770 150" stroke="rgba(101, 214, 154, 0.25)" stroke-width="1.5"></path>
+<path class="animate-flow-fast" d="M 570 240 C 650 220, 690 160, 770 150" stroke="#65D69A" stroke-width="1.5"></path>
+<path d="M 570 260 C 650 280, 690 340, 770 350" stroke="rgba(79, 140, 255, 0.25)" stroke-width="1.5"></path>
+<path class="animate-flow" d="M 570 260 C 650 280, 690 340, 770 350" stroke="#4F8CFF" stroke-width="1.5"></path>
+<!-- Traveling Energy Nodes -->
+<circle cx="340" cy="250" fill="#4F8CFF" r="3.5">
+<animate attributename="opacity" dur="2s" repeatcount="indefinite" values="0.3;1;0.3"></animate>
+</circle>
+<circle cx="660" cy="250" fill="#65D69A" r="3.5">
+<animate attributename="opacity" dur="2.4s" repeatcount="indefinite" values="0.3;1;0.3"></animate>
+</circle>
+</svg>
+<!-- 3-Column Overlay Layout: LEFT INPUT, CENTER ENGINE, RIGHT OUTCOME -->
+<div class="relative z-10 w-full grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+<!-- LEFT COLUMN: The Incoming Raw Issue & Context Nodes -->
+<div class="md:col-span-4 flex flex-col gap-4 animate-float-slow">
+<!-- Issue Card -->
+<div class="p-4 rounded-xl bg-panel/90 border border-borderMuted shadow-xl backdrop-blur-md hover:border-red-400/40 transition-all">
+<div class="flex items-center justify-between pb-2 mb-2 border-b border-borderMuted text-xs font-mono">
+<span class="flex items-center gap-1.5 text-red-400">
+<span class="w-2 h-2 rounded-full bg-red-400 animate-ping"></span>
+                    Issue #128
+                  </span>
+<span class="text-muted text-[11px]">unresolved bug</span>
+</div>
+<h4 class="font-sans font-medium text-sm text-chalk leading-snug">
+                  Uncaught Redis timeout during session verification in token refresh
+                </h4>
+<div class="mt-3 p-2 rounded bg-canvas/70 border border-borderMuted font-mono text-[11px] text-muted space-y-1">
+<div class="text-red-400/90 truncate">Error: connect ETIMEDOUT 10.0.4.12:6379</div>
+<div class="text-muted/60">at SessionManager.verify (src/auth/session.ts:141)</div>
+</div>
+<div class="mt-3 flex items-center justify-between font-mono text-[10px] text-muted">
+<span class="px-2 py-0.5 rounded bg-surface border border-borderMuted">AST Context: 14 files</span>
+<span class="text-cyan">P1 Critical</span>
+</div>
+</div>
+<!-- Floating Context Tokens -->
+<div class="hidden sm:flex items-center gap-2 font-mono text-[10px]">
+<span class="px-2.5 py-1 rounded-full bg-surface border border-borderMuted text-muted flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-violet"></span>ASTGraph::traverse
+                </span>
+<span class="px-2.5 py-1 rounded-full bg-surface border border-borderMuted text-muted flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-cyan"></span>tokenize::gemma-4
+                </span>
+</div>
+</div>
+<!-- CENTER COLUMN: Bespoke RepoPilot Core Glyphic Engine -->
+<div class="md:col-span-4 flex flex-col items-center justify-center my-6 md:my-0">
+<div class="relative group">
+<!-- Outer Pulse Rings -->
+<div class="absolute -inset-6 rounded-full border border-violet/30 animate-ping pointer-events-none opacity-20"></div>
+<div class="absolute -inset-10 rounded-full border border-cyan/20 animate-pulse pointer-events-none"></div>
+<!-- Geometric Core Orb -->
+<div class="relative w-36 h-36 rounded-full bg-gradient-to-br from-panelHigh via-panel to-canvas border-2 border-borderBright flex flex-col items-center justify-center p-3 text-center shadow-[0_0_60px_rgba(139,92,246,0.3)] transition-transform duration-500 group-hover:scale-105">
+<div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-electric via-violet to-cyan flex items-center justify-center shadow-lg mb-1">
+<svg class="text-canvas" fill="none" height="24" viewbox="0 0 24 24" width="24">
+<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+</svg>
+</div>
+<div class="font-sans font-bold text-xs text-chalk tracking-tight">RepoPilot Core</div>
+<div class="font-mono text-[9px] text-cyan uppercase tracking-widest mt-0.5">Gemma 4 AST</div>
+<div class="mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full bg-canvas/80 border border-borderMuted font-mono text-[8px] text-emeraldVerified">
+<span class="w-1 h-1 rounded-full bg-emeraldVerified animate-pulse"></span>SYNTHESIZING
+                  </div>
+</div>
+</div>
+<div class="mt-4 font-mono text-[11px] text-muted text-center tracking-wide">
+                Isolated sandbox execution loop
+              </div>
+</div>
+<!-- RIGHT COLUMN: The Verified Transformed Artifacts -->
+<div class="md:col-span-4 flex flex-col gap-4 animate-float-delay">
+<!-- Surgical Unified Diff -->
+<div class="p-4 rounded-xl bg-panel/90 border border-emeraldVerified/30 shadow-xl backdrop-blur-md hover:border-emeraldVerified/60 transition-all font-mono">
+<div class="flex items-center justify-between pb-2 mb-2 border-b border-borderMuted text-xs">
+<span class="flex items-center gap-1.5 text-emeraldVerified font-semibold">
+<span class="w-2 h-2 rounded-full bg-emeraldVerified"></span>
+                    Unified Patch Synthesized
+                  </span>
+<span class="text-muted text-[10px]">src/auth/session.ts</span>
+</div>
+<div class="p-2.5 rounded bg-canvas/90 border border-borderMuted text-[10.5px] leading-relaxed space-y-1">
+<div class="text-muted/50">@@ -141,1 +141,4 @@</div>
+<div class="text-red-400 bg-red-950/30 px-1 rounded line-through">- const token = await redis.get(key);</div>
+<div class="text-emeraldVerified bg-emerald-950/30 px-1 rounded font-medium">+ const token = await redis.getWithBackoff(key, {</div>
+<div class="text-emeraldVerified bg-emerald-950/30 px-1 rounded font-medium">+   retries: 3, timeoutMs: 450</div>
+<div class="text-emeraldVerified bg-emerald-950/30 px-1 rounded font-medium">+ });</div>
+</div>
+<!-- Test Confirmation Badge -->
+<div class="mt-3 flex items-center justify-between text-[11px] pt-2 border-t border-borderMuted">
+<div class="flex items-center gap-1.5 text-emeraldVerified font-medium">
+<svg class="w-4 h-4 text-emeraldVerified" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>24/24 tests passed</span>
+</div>
+<span class="text-muted font-mono text-[10px]">Docker sbx-904f · exit 0</span>
+</div>
+</div>
+<!-- Emerging PR Review Badge -->
+<div class="p-3 rounded-lg bg-surface border border-electric/40 flex items-center justify-between shadow-lg">
+<div class="flex items-center gap-2">
+<span class="w-6 h-6 rounded bg-electric/20 border border-electric/40 flex items-center justify-center font-mono text-xs text-electric font-bold">PR</span>
+<div>
+<div class="font-sans text-xs font-semibold text-chalk">PR #129 Ready for Review</div>
+<div class="font-mono text-[10px] text-muted">Evidence &amp; sandbox artifacts attached</div>
+</div>
+</div>
+<span class="font-mono text-[10px] px-2 py-1 rounded bg-electric text-canvas font-bold uppercase tracking-wider">Awaiting Sign-off</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Metric Footer Bar -->
+<div class="mt-6 pt-4 border-t border-borderMuted/70 grid grid-cols-2 md:grid-cols-4 gap-4 text-left font-mono">
+<div>
+<div class="text-muted text-[10px] uppercase tracking-wider">TRIAGE VELOCITY</div>
+<div class="text-chalk text-base font-semibold mt-0.5">4m 12s <span class="text-emeraldVerified text-xs font-normal">avg</span></div>
+</div>
+<div>
+<div class="text-muted text-[10px] uppercase tracking-wider">DIFF SURGICALITY</div>
+<div class="text-chalk text-base font-semibold mt-0.5">+4 / -1 lines</div>
+</div>
+<div>
+<div class="text-muted text-[10px] uppercase tracking-wider">HOST ISOLATION</div>
+<div class="text-chalk text-base font-semibold mt-0.5">100% MicroVM</div>
+</div>
+<div>
+<div class="text-muted text-[10px] uppercase tracking-wider">HUMAN APPROVAL</div>
+<div class="text-cyan text-base font-semibold mt-0.5">Maintainer Gated</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- CREATIVE STORYTELLING SPLIT ("Good ideas deserve better maintainers") -->
+<section class="relative py-28 border-t border-borderMuted bg-canvas overflow-hidden" id="story">
+<div class="max-w-7xl mx-auto px-6 lg:px-8">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+<!-- Left: Massive Provocative Headline & Editorial Copy -->
+<div class="lg:col-span-5 space-y-6">
+<div class="font-mono text-xs tracking-widest text-violet uppercase flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-violet"></span>
+            THE TRIAGE CRISIS IN OPEN SOURCE
+          </div>
+<h2 class="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-chalk leading-[1.08]">
+            Good ideas deserve better maintainers.
+          </h2>
+<p class="text-muted text-base sm:text-lg leading-relaxed font-normal">
+            78% of reported open source issues languish in purgatory. Not because maintainers don't care, but because reproducing a crash across 400,000 lines of unfamiliar legacy architecture demands cognitive hours nobody has.
+          </p>
+<p class="text-muted text-base leading-relaxed">
+            RepoPilot doesn't just guess keywords. It builds an in-memory semantic dependency topology of the entire project, paths through call chains, executes reproduction tests, and pinpoints the exact culprit.
+          </p>
+<div class="pt-4 flex flex-col sm:flex-row gap-4 border-t border-borderMuted font-mono text-xs">
+<div class="space-y-1">
+<span class="text-muted text-[11px]">TRADITIONAL TRIAGE</span>
+<div class="text-red-400 font-medium">4.2 days avg wait</div>
+</div>
+<div class="sm:border-l border-borderMuted sm:pl-4 space-y-1">
+<span class="text-muted text-[11px]">WITH REPOPILOT</span>
+<div class="text-emeraldVerified font-medium">Under 5 minutes</div>
+</div>
+</div>
+</div>
+<!-- Right: Illustrated Repository Topology & AST Maze Path -->
+<div class="lg:col-span-7">
+<div class="relative rounded-2xl bg-surface border border-borderMuted p-6 shadow-2xl overflow-hidden">
+<!-- Header bar -->
+<div class="flex items-center justify-between pb-4 mb-4 border-b border-borderMuted font-mono text-xs text-muted">
+<span>// REPOSITORY GRAPH TOPOLOGY :: fastify-auth-suite</span>
+<span class="text-cyan">1,248 NODES PARSED</span>
+</div>
+<!-- Vector Topology Diagram -->
+<div class="relative w-full h-[380px] bg-canvas/60 rounded-xl border border-borderMuted/60 p-4 overflow-hidden flex items-center justify-center">
+<svg class="absolute inset-0 w-full h-full pointer-events-none" fill="none" viewbox="0 0 600 360">
+<!-- Dim Background Mesh Nodes (The Unfamiliar Codebase) -->
+<g opacity="0.25">
+<line stroke="#9296A5" stroke-width="1" x1="80" x2="160" y1="60" y2="90"></line>
+<line stroke="#9296A5" stroke-width="1" x1="160" x2="220" y1="90" y2="50"></line>
+<line stroke="#9296A5" stroke-width="1" x1="160" x2="210" y1="90" y2="130"></line>
+<line stroke="#9296A5" stroke-width="1" x1="220" x2="310" y1="50" y2="80"></line>
+<line stroke="#9296A5" stroke-width="1" x1="210" x2="290" y1="130" y2="170"></line>
+<line stroke="#9296A5" stroke-width="1" x1="290" x2="380" y1="170" y2="140"></line>
+<line stroke="#9296A5" stroke-width="1" x1="380" x2="480" y1="140" y2="100"></line>
+<line stroke="#9296A5" stroke-width="1" x1="380" x2="450" y1="140" y2="210"></line>
+<line stroke="#9296A5" stroke-width="1" x1="450" x2="540" y1="210" y2="240"></line>
+<line stroke="#9296A5" stroke-width="1" x1="290" x2="270" y1="170" y2="260"></line>
+<line stroke="#9296A5" stroke-width="1" x1="270" x2="360" y1="260" y2="300"></line>
+<line stroke="#9296A5" stroke-width="1" x1="120" x2="210" y1="220" y2="130"></line>
+<line stroke="#9296A5" stroke-width="1" x1="120" x2="180" y1="220" y2="290"></line>
+<line stroke="#9296A5" stroke-width="1" x1="180" x2="270" y1="290" y2="260"></line>
+<circle cx="80" cy="60" fill="#9296A5" r="3"></circle>
+<circle cx="220" cy="50" fill="#9296A5" r="3"></circle>
+<circle cx="310" cy="80" fill="#9296A5" r="3"></circle>
+<circle cx="480" cy="100" fill="#9296A5" r="3"></circle>
+<circle cx="540" cy="240" fill="#9296A5" r="3"></circle>
+<circle cx="360" cy="300" fill="#9296A5" r="3"></circle>
+<circle cx="120" cy="220" fill="#9296A5" r="3"></circle>
+<circle cx="180" cy="290" fill="#9296A5" r="3"></circle>
+</g>
+<!-- Radiant Golden/Cyan Resolved Investigation Path -->
+<path class="animate-flow-fast" d="M 60 180 C 140 180, 160 130, 210 130 C 260 130, 260 210, 340 210 C 390 210, 420 180, 480 180" fill="none" stroke="#42D9E8" stroke-linecap="round" stroke-width="3"></path>
+<path d="M 60 180 C 140 180, 160 130, 210 130 C 260 130, 260 210, 340 210 C 390 210, 420 180, 480 180" fill="none" opacity="0.15" stroke="#8B5CF6" stroke-linecap="round" stroke-width="8"></path>
+<!-- Entry Point: Issue Reported -->
+<circle cx="60" cy="180" fill="#F87171" r="6" stroke="#FEE2E2" stroke-width="2"></circle>
+<!-- Culprit Node: Root Cause Pinpoint -->
+<circle class="animate-pulse" cx="480" cy="180" fill="#65D69A" r="8" stroke="#FFFFFF" stroke-width="2"></circle>
+</svg>
+<!-- Node Callout 1: Issue Entry -->
+<div class="absolute top-1/2 -translate-y-8 left-4 p-2.5 rounded-lg bg-panel border border-red-500/40 font-mono text-[10px] shadow-lg max-w-[140px]">
+<span class="text-red-400 font-semibold flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span>Issue Ingested
+                </span>
+<span class="text-muted text-[9px] block mt-0.5">JWT timeout bug</span>
+</div>
+<!-- Node Callout 2: Traversed AST Junction -->
+<div class="absolute top-16 left-1/3 -translate-x-1/2 p-2 rounded bg-surface border border-violet/40 font-mono text-[10px] text-violet shadow-md">
+<span>session.controller.ts</span>
+</div>
+<!-- Node Callout 3: Root Cause Pinpoint Target -->
+<div class="absolute top-1/2 -translate-y-12 right-6 p-3 rounded-xl bg-panel border border-emeraldVerified shadow-xl font-mono text-xs max-w-[210px] backdrop-blur-md">
+<div class="flex items-center justify-between text-emeraldVerified font-bold pb-1 border-b border-borderMuted text-[11px]">
+<span>ROOT CAUSE ISOLATED</span>
+<span class="w-2 h-2 rounded-full bg-emeraldVerified"></span>
+</div>
+<div class="mt-1 text-chalk font-semibold text-[11px]">src/auth/session.ts:141</div>
+<div class="text-muted text-[10px] mt-0.5">Missing exponential retry logic on Redis reconnect trigger.</div>
+</div>
+</div>
+<!-- Footer descriptor -->
+<div class="mt-4 flex items-center justify-between font-mono text-[11px] text-muted">
+<span>Investigation depth: 14 dependency hops</span>
+<span class="text-emeraldVerified">Confidence: 99.4%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- THE 5-STAGE WORKFLOW JOURNEY (INTERACTIVE PIPELINE) -->
+<section class="py-28 border-t border-borderMuted bg-canvas" id="workflow">
+<div class="max-w-7xl mx-auto px-6 lg:px-8">
+<div class="max-w-3xl space-y-4 mb-16">
+<div class="font-mono text-xs tracking-widest text-cyan uppercase flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-cyan"></span>
+          THE 5-STAGE AGENTIC PIPELINE
+        </div>
+<h2 class="text-4xl sm:text-5xl font-bold tracking-tight text-chalk">
+          One issue. A complete engineering workflow.
+        </h2>
+<p class="text-muted text-base sm:text-lg">
+          From first webhook payload to verified pull request — transparent, contained, and strictly audited at every commit.
+        </p>
+</div>
+<!-- Horizontal Stage Timeline Switcher -->
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-3 pb-8" id="stageTabs">
+<!-- 01 -->
+<button class="stage-btn active text-left p-4 rounded-xl border border-electric/60 bg-panelHigh transition-all" data-stage="0" onclick="setStage(0)">
+<div class="font-mono text-xs text-electric font-semibold">01 — CONNECT</div>
+<div class="text-sm font-sans font-semibold text-chalk mt-1">Repo Ingestion</div>
+<div class="text-[11px] font-mono text-muted mt-1 truncate">AST deep parsing</div>
+</button>
+<!-- 02 -->
+<button class="stage-btn text-left p-4 rounded-xl border border-borderMuted bg-surface hover:border-borderBright transition-all" data-stage="1" onclick="setStage(1)">
+<div class="font-mono text-xs text-violet font-semibold">02 — INVESTIGATE</div>
+<div class="text-sm font-sans font-semibold text-chalk mt-1">Gemma 4 Trace</div>
+<div class="text-[11px] font-mono text-muted mt-1 truncate">Root cause pin</div>
+</button>
+<!-- 03 -->
+<button class="stage-btn text-left p-4 rounded-xl border border-borderMuted bg-surface hover:border-borderBright transition-all" data-stage="2" onclick="setStage(2)">
+<div class="font-mono text-xs text-cyan font-semibold">03 — GENERATE</div>
+<div class="text-sm font-sans font-semibold text-chalk mt-1">Surgical Diff</div>
+<div class="text-[11px] font-mono text-muted mt-1 truncate">Zero-hallucination</div>
+</button>
+<!-- 04 -->
+<button class="stage-btn text-left p-4 rounded-xl border border-borderMuted bg-surface hover:border-borderBright transition-all" data-stage="3" onclick="setStage(3)">
+<div class="font-mono text-xs text-emeraldVerified font-semibold">04 — VERIFY</div>
+<div class="text-sm font-sans font-semibold text-chalk mt-1">Docker Sandbox</div>
+<div class="text-[11px] font-mono text-muted mt-1 truncate">Real test suites</div>
+</button>
+<!-- 05 -->
+<button class="stage-btn text-left p-4 rounded-xl border border-borderMuted bg-surface hover:border-borderBright transition-all" data-stage="4" onclick="setStage(4)">
+<div class="font-mono text-xs text-chalk font-semibold">05 — PREPARE</div>
+<div class="text-sm font-sans font-semibold text-chalk mt-1">PR &amp; Attestation</div>
+<div class="text-[11px] font-mono text-muted mt-1 truncate">Human sign-off</div>
+</button>
+</div>
+<!-- Dynamic Stage Display Window -->
+<div class="rounded-2xl bg-surface border border-borderMuted p-6 sm:p-8 shadow-2xl min-h-[380px] flex flex-col justify-between" id="stageContentBox">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+<div class="lg:col-span-5 space-y-4">
+<div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-panel border border-borderMuted font-mono text-xs text-cyan" id="stageBadge">
+              STAGE 01 :: REPO INGESTION
+            </div>
+<h3 class="text-2xl sm:text-3xl font-bold text-chalk" id="stageTitle">
+              Zero-friction GitHub Repository Ingestion
+            </h3>
+<p class="text-muted text-sm sm:text-base leading-relaxed" id="stageDesc">
+              Install the RepoPilot GitHub App in two clicks. The agent generates a complete semantic Abstract Syntax Tree, indexes type signatures, parses test manifests, and honors existing repository licensing rules.
+            </p>
+<div class="pt-2 font-mono text-xs text-muted space-y-1.5 border-t border-borderMuted" id="stageMeta">
+<div>// Ingestion Latency: <span class="text-chalk">1.8s for 250k LOC</span></div>
+<div>// Memory Footprint: <span class="text-chalk">Ephemeral vector cache</span></div>
+</div>
+</div>
+<!-- Dynamic Terminal / Illustration Pane -->
+<div class="lg:col-span-7">
+<div class="rounded-xl bg-canvas border border-borderMuted overflow-hidden shadow-xl font-mono text-xs">
+<div class="bg-panel px-4 py-2 border-b border-borderMuted flex items-center justify-between text-muted text-[11px]">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-borderBright"></span>
+<span id="terminalTitle">repopilot-runner --stage 01 --target fastify/auth</span>
+</div>
+<span>EXEC: OK</span>
+</div>
+<div class="p-5 font-mono text-[12px] leading-relaxed space-y-2 text-muted" id="terminalLogs">
+<div class="text-electric">$ repopilot connect https://github.com/fastify/fastify-jwt</div>
+<div class="text-chalk">✔ Authentication handshake verified [GitHub App AppID: #40192]</div>
+<div class="text-chalk">✔ Cloning shallow HEAD (commit: 9f8a12c)</div>
+<div class="text-cyan">✔ Parsing AST syntax forest... (1,248 files indexed)</div>
+<div class="text-chalk">✔ Identifying package scripts: ["test", "test:coverage", "lint"]</div>
+<div class="text-emeraldVerified">✔ Workspace ready in sandbox microVM [0.42s]</div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-borderMuted flex items-center justify-between text-xs font-mono text-muted">
+<span>Continuous audit log enabled</span>
+<span class="text-electric">Next Stage Automatically Armed →</span>
+</div>
+</div>
+</div>
+</section>
+<!-- SIGNATURE FEATURE — PATCH EVIDENCE REPORT SHOWCASE -->
+<section class="py-28 border-t border-borderMuted bg-surface/50" id="evidence">
+<div class="max-w-7xl mx-auto px-6 lg:px-8">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end mb-12">
+<div class="lg:col-span-8 space-y-3">
+<div class="font-mono text-xs tracking-widest text-emeraldVerified uppercase flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-emeraldVerified"></span>
+            VERIFIABLE EVIDENCE OVER HALLUCINATIONS
+          </div>
+<h2 class="text-4xl sm:text-5xl font-bold tracking-tight text-chalk">
+            AI-generated code is easy. <br class="hidden sm:inline"/>Verified code is different.
+          </h2>
+<p class="text-muted text-base sm:text-lg max-w-2xl">
+            Never merge blind code again. Every RepoPilot pull request arrives with a cryptographic Evidence Report proving which tests were run, sandbox exit codes, and exact AI rationale.
+          </p>
+</div>
+<div class="lg:col-span-4 flex lg:justify-end">
+<div class="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-panel border border-emeraldVerified/40 font-mono text-xs text-emeraldVerified">
+<span class="w-2 h-2 rounded-full bg-emeraldVerified animate-pulse"></span>
+<span>Cryptographic Proof: Attested #EP-88219</span>
+</div>
+</div>
+</div>
+<!-- High-Fidelity Layered Evidence Report Widget -->
+<div class="rounded-2xl bg-canvas border border-borderMuted shadow-[0_25px_100px_rgba(0,0,0,0.8)] overflow-hidden">
+<!-- Report Bar -->
+<div class="bg-panel px-6 py-3.5 border-b border-borderMuted flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
+<div class="flex items-center gap-3">
+<span class="text-chalk font-semibold">Evidence Report #EP-88219</span>
+<span class="text-borderBright">/</span>
+<span class="text-muted">Issue #128 Fix Verification</span>
+<span class="px-2 py-0.5 rounded bg-emeraldVerified/10 text-emeraldVerified border border-emeraldVerified/20 uppercase text-[10px]">
+              All Tests Passed
+            </span>
+</div>
+<div class="flex items-center gap-4 text-muted text-[11px]">
+<span>CONTAINER: sbx-904f</span>
+<span>IMAGE: node:20-alpine</span>
+<span class="text-chalk">EXIT: 0</span>
+</div>
+</div>
+<!-- Interactive Evidence Tabs -->
+<div class="border-b border-borderMuted bg-surface/70 px-6 flex items-center gap-6 font-mono text-xs overflow-x-auto" id="evidenceTabs">
+<button class="ev-tab-btn py-3 border-b-2 border-electric text-chalk font-medium transition-colors" data-ev="diff" onclick="switchEvidenceTab('diff')">
+            [Code Diff &amp; Rationale]
+          </button>
+<button class="ev-tab-btn py-3 border-b-2 border-transparent text-muted hover:text-chalk transition-colors" data-ev="telemetry" onclick="switchEvidenceTab('telemetry')">
+            [Docker Test Telemetry]
+          </button>
+<button class="ev-tab-btn py-3 border-b-2 border-transparent text-muted hover:text-chalk transition-colors" data-ev="ast" onclick="switchEvidenceTab('ast')">
+            [Investigation Summary]
+          </button>
+</div>
+<!-- 3-Pane Code Review Body -->
+<div class="grid grid-cols-1 lg:grid-cols-12 min-h-[460px]" id="evidencePanes">
+<!-- Left Pane: File Manifest & Agent Rationale -->
+<div class="lg:col-span-4 bg-surface p-6 border-b lg:border-b-0 lg:border-r border-borderMuted space-y-6">
+<div>
+<div class="font-mono text-[11px] text-muted uppercase tracking-wider mb-2">Affected Artifacts</div>
+<div class="space-y-1.5 font-mono text-xs">
+<div class="p-2 rounded bg-panel border border-borderMuted flex items-center justify-between text-chalk">
+<span class="truncate">src/auth/session.ts</span>
+<span class="text-[10px] px-1.5 py-0.5 rounded bg-electric/20 text-electric">MODIFIED</span>
+</div>
+<div class="p-2 rounded hover:bg-panel/40 flex items-center justify-between text-muted">
+<span class="truncate">tests/auth.test.ts</span>
+<span class="text-[10px] px-1.5 py-0.5 rounded bg-emeraldVerified/20 text-emeraldVerified">ADDED</span>
+</div>
+<div class="p-2 rounded hover:bg-panel/40 flex items-center justify-between text-muted/70">
+<span class="truncate">src/middleware/token.ts</span>
+<span class="text-[10px] px-1.5 py-0.5 rounded bg-surface text-muted">UNTOUCHED</span>
+</div>
+</div>
+</div>
+<div class="pt-4 border-t border-borderMuted space-y-2">
+<div class="font-mono text-[11px] text-cyan uppercase tracking-wider">Agent Rationale</div>
+<p class="text-xs text-muted leading-relaxed font-sans">
+                "Observed unhandled promise rejection when Redis socket rebalances during high connection concurrency. Instead of failing immediately, the patch introduces an exponential backoff retry loop with a 450ms ceiling and structured error translation."
+              </p>
+</div>
+<div class="p-3 rounded bg-canvas border border-borderMuted font-mono text-[10.5px] text-muted space-y-1">
+<div class="flex justify-between">
+<span>AST Invariants:</span>
+<span class="text-emeraldVerified">0 Violations</span>
+</div>
+<div class="flex justify-between">
+<span>Lint Compliance:</span>
+<span class="text-emeraldVerified">ESLint Clean</span>
+</div>
+<div class="flex justify-between">
+<span>Signed By:</span>
+<span class="text-chalk">RepoPilot Key #8fbc</span>
+</div>
+</div>
+</div>
+<!-- Right Pane: Code Diff / Telemetry Output -->
+<div class="lg:col-span-8 bg-canvas p-6 overflow-x-auto" id="evidenceDynamicView">
+<!-- Default Diff View -->
+<div class="space-y-4" id="viewDiff">
+<div class="flex items-center justify-between font-mono text-xs text-muted pb-2 border-b border-borderMuted">
+<span>diff --git a/src/auth/session.ts b/src/auth/session.ts</span>
+<span class="text-cyan">TypeScript</span>
+</div>
+<div class="font-mono text-xs leading-relaxed space-y-0.5 select-text">
+<div class="text-muted/50 py-1">@@ -139,8 +139,12 @@ export async function verifySession(sessionId: string) {</div>
+<div class="text-muted/60 pl-2">  const key = `session:${sessionId}`;</div>
+<div class="bg-red-950/20 text-red-400 px-2 py-1 rounded flex items-center justify-between group">
+<span>- const token = await redis.get(key);</span>
+<span class="text-[10px] text-red-500/80 font-mono opacity-0 group-hover:opacity-100">Vulnerable: unhandled rejection</span>
+</div>
+<div class="bg-emerald-950/25 text-emeraldVerified px-2 py-0.5 rounded">
+<span>+ const token = await redis.getWithBackoff(key, {</span>
+</div>
+<div class="bg-emerald-950/25 text-emeraldVerified px-2 py-0.5 rounded">
+<span>+   retries: 3,</span>
+</div>
+<div class="bg-emerald-950/25 text-emeraldVerified px-2 py-0.5 rounded">
+<span>+   timeoutMs: 450</span>
+</div>
+<div class="bg-emerald-950/25 text-emeraldVerified px-2 py-0.5 rounded">
+<span>+ });</span>
+</div>
+<div class="bg-emerald-950/25 text-emeraldVerified px-2 py-0.5 rounded">
+<span>+ if (!token) throw new SessionTimeoutException(sessionId);</span>
+</div>
+<div class="text-muted/60 pl-2">  return deserializeUser(token);</div>
+<div class="text-muted/60 pl-2">}</div>
+</div>
+<!-- Inline AI Verification Bar -->
+<div class="mt-6 p-4 rounded-xl bg-panel border border-borderMuted flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
+<div class="flex items-center gap-2 text-chalk">
+<span class="w-2 h-2 rounded-full bg-emeraldVerified"></span>
+<span>Sandbox verified: 24/24 unit &amp; integration tests passed</span>
+</div>
+<span class="text-cyan">Executed in 1.42s</span>
+</div>
+</div>
+<!-- Telemetry View (Hidden initially) -->
+<div class="hidden space-y-3 font-mono text-xs" id="viewTelemetry">
+<div class="text-muted pb-2 border-b border-borderMuted">
+                $ docker exec -it sandbox-sbx-904f npm test -- --coverage
+              </div>
+<div class="text-chalk bg-panel/50 p-4 rounded-xl space-y-1.5 leading-relaxed text-[11.5px]">
+<div class="text-muted">PASS tests/auth.test.ts</div>
+<div class="text-emeraldVerified">✔ verifySession under rapid Redis reconnections (140ms)</div>
+<div class="text-emeraldVerified">✔ exponential backoff limits maximum retry count to 3 (88ms)</div>
+<div class="text-emeraldVerified">✔ SessionTimeoutException raised on dead redis cluster (12ms)</div>
+<div class="text-emeraldVerified">✔ user session properly deserialized with valid payload (4ms)</div>
+<div class="text-muted pt-2">-------------------------------------------------------</div>
+<div class="text-chalk font-semibold">Test Suites: 1 passed, 1 total</div>
+<div class="text-emeraldVerified font-semibold">Tests:       24 passed, 24 total</div>
+<div class="text-chalk">Snapshots:   0 total</div>
+<div class="text-muted">Time:        1.428 s, estimated 2 s</div>
+<div class="text-emeraldVerified pt-2">Container exited with code 0. Zero host contamination.</div>
+</div>
+</div>
+<!-- AST View (Hidden initially) -->
+<div class="hidden space-y-3 font-mono text-xs" id="viewAst">
+<div class="text-muted pb-2 border-b border-borderMuted">
+                AST Traversal Log :: Fastify Dependency Vector
+              </div>
+<div class="text-chalk bg-panel/50 p-4 rounded-xl space-y-1.5 text-[11.5px]">
+<div class="text-cyan">1. Root parsed: src/auth/session.ts</div>
+<div class="text-muted">2. Referenced symbols: ['redis', 'verifySession', 'deserializeUser']</div>
+<div class="text-muted">3. Found 3 callers in src/routes/auth.routes.ts</div>
+<div class="text-emeraldVerified">4. Invariant checked: Return type Promise&lt;User&gt; perfectly preserved</div>
+<div class="text-chalk font-semibold pt-2">Confidence Score: 99.8% · Human Review Recommended</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Maintainer Review Bottom Action Bar -->
+<div class="bg-panel px-6 py-4 border-t border-borderMuted flex flex-wrap items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<span class="w-8 h-8 rounded-full bg-chalk text-canvas font-mono text-xs font-bold flex items-center justify-center">
+              GH
+            </span>
+<div>
+<div class="font-sans text-xs font-semibold text-chalk">Maintainer Sign-Off Required</div>
+<div class="font-mono text-[10px] text-muted">RepoPilot never merges code without your explicit approval</div>
+</div>
+</div>
+<div class="flex items-center gap-3 font-mono text-xs">
+<button class="px-4 py-2 rounded-full border border-borderMuted hover:border-borderBright text-muted hover:text-chalk transition-all">
+              Request Alternative Diff
+            </button>
+<button class="px-5 py-2 rounded-full bg-emeraldVerified text-canvas font-semibold hover:bg-emerald-400 transition-all flex items-center gap-1.5 shadow-[0_0_20px_rgba(101,214,154,0.3)]">
+<span>Approve &amp; Open PR #129</span>
+<span>→</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- ASYMMETRICAL EDITORIAL FEATURE GRID -->
+<section class="py-28 border-t border-borderMuted bg-canvas" id="features">
+<div class="max-w-7xl mx-auto px-6 lg:px-8">
+<div class="max-w-3xl space-y-3 mb-16">
+<div class="font-mono text-xs tracking-widest text-electric uppercase flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-electric"></span>
+          ENGINEERING ARCHITECTURE PRINCIPLES
+        </div>
+<h2 class="text-4xl sm:text-5xl font-bold tracking-tight text-chalk">
+          Not another AI coding chatbot.
+        </h2>
+<p class="text-muted text-base sm:text-lg">
+          An autonomous engineering pipeline built around deep context, hermetic execution, and deterministic proof.
+        </p>
+</div>
+<!-- Asymmetrical Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+<!-- Feature 01 (Large 8-col anchor) -->
+<div class="md:col-span-8 p-8 rounded-2xl bg-surface border border-borderMuted hover:border-electric/50 transition-all flex flex-col justify-between group">
+<div class="space-y-4">
+<div class="flex items-center justify-between font-mono">
+<span class="text-2xl font-bold text-electric">01</span>
+<span class="text-xs px-2.5 py-1 rounded-full bg-panel text-muted uppercase">Context Engine</span>
+</div>
+<h3 class="text-2xl sm:text-3xl font-bold text-chalk">
+              Semantic AST &amp; Multi-Repo Graph Context
+            </h3>
+<p class="text-muted text-base max-w-xl leading-relaxed">
+              RepoPilot doesn't stuff random string files into an LLM window. It indexes an immutable dependency graph of your functions, types, and test invariants so generated patches respect internal conventions.
+            </p>
+</div>
+<div class="mt-8 pt-6 border-t border-borderMuted grid grid-cols-3 gap-4 font-mono">
+<div>
+<div class="text-chalk text-xl font-bold">0.04ms</div>
+<div class="text-muted text-[11px]">Symbol Query Latency</div>
+</div>
+<div>
+<div class="text-chalk text-xl font-bold">100k+</div>
+<div class="text-muted text-[11px]">AST Tokens Per Context</div>
+</div>
+<div>
+<div class="text-chalk text-xl font-bold">100%</div>
+<div class="text-emeraldVerified text-[11px]">Type-Safety Invariant</div>
+</div>
+</div>
+</div>
+<!-- Feature 02 (4-col card) -->
+<div class="md:col-span-4 p-8 rounded-2xl bg-surface border border-borderMuted hover:border-violet/50 transition-all flex flex-col justify-between group">
+<div class="space-y-4">
+<div class="flex items-center justify-between font-mono">
+<span class="text-2xl font-bold text-violet">02</span>
+<span class="text-xs px-2.5 py-1 rounded-full bg-panel text-muted uppercase">Model Inference</span>
+</div>
+<h3 class="text-xl sm:text-2xl font-bold text-chalk">
+              Gemma 4 Intelligence
+            </h3>
+<p class="text-muted text-sm leading-relaxed">
+              Tuned specifically for code synthesis, AST walks, and surgical unified git diffs without hallucinated comments or architectural drift.
+            </p>
+</div>
+<div class="mt-8 p-3 rounded-xl bg-canvas border border-borderMuted font-mono text-xs flex items-center justify-between">
+<span class="text-muted">Reasoning Speed</span>
+<span class="text-violet font-semibold">142 tok/sec</span>
+</div>
+</div>
+<!-- Feature 03 (4-col card) -->
+<div class="md:col-span-4 p-8 rounded-2xl bg-surface border border-borderMuted hover:border-cyan/50 transition-all flex flex-col justify-between group">
+<div class="space-y-4">
+<div class="flex items-center justify-between font-mono">
+<span class="text-2xl font-bold text-cyan">03</span>
+<span class="text-xs px-2.5 py-1 rounded-full bg-panel text-muted uppercase">Minimal Diffs</span>
+</div>
+<h3 class="text-xl sm:text-2xl font-bold text-chalk">
+              Surgical Diffs Only
+            </h3>
+<p class="text-muted text-sm leading-relaxed">
+              No bloated reformatting or extraneous rewrites. Every pull request touches only the necessary lines, honoring existing ESLint and Prettier configs.
+            </p>
+</div>
+<div class="mt-8 p-3 rounded-xl bg-canvas border border-borderMuted font-mono text-xs flex items-center justify-between">
+<span class="text-muted">Diff Precision</span>
+<span class="text-cyan font-semibold">99.2% Clean</span>
+</div>
+</div>
+<!-- Feature 04 (4-col card) -->
+<div class="md:col-span-4 p-8 rounded-2xl bg-surface border border-borderMuted hover:border-emeraldVerified/50 transition-all flex flex-col justify-between group">
+<div class="space-y-4">
+<div class="flex items-center justify-between font-mono">
+<span class="text-2xl font-bold text-emeraldVerified">04</span>
+<span class="text-xs px-2.5 py-1 rounded-full bg-panel text-muted uppercase">Execution</span>
+</div>
+<h3 class="text-xl sm:text-2xl font-bold text-chalk">
+              Hermetic Docker Sandboxes
+            </h3>
+<p class="text-muted text-sm leading-relaxed">
+              Every reproduction test executes inside an isolated ephemeral Docker container. Destroyed immediately after test pass. Zero host footprint.
+            </p>
+</div>
+<div class="mt-8 p-3 rounded-xl bg-canvas border border-borderMuted font-mono text-xs flex items-center justify-between">
+<span class="text-muted">Container Boot</span>
+<span class="text-emeraldVerified font-semibold">&lt; 280ms</span>
+</div>
+</div>
+<!-- Feature 05 (4-col card) -->
+<div class="md:col-span-4 p-8 rounded-2xl bg-surface border border-borderMuted hover:border-borderBright transition-all flex flex-col justify-between group">
+<div class="space-y-4">
+<div class="flex items-center justify-between font-mono">
+<span class="text-2xl font-bold text-chalk">05</span>
+<span class="text-xs px-2.5 py-1 rounded-full bg-panel text-muted uppercase">Governance</span>
+</div>
+<h3 class="text-xl sm:text-2xl font-bold text-chalk">
+              Human-in-the-Loop Gating
+            </h3>
+<p class="text-muted text-sm leading-relaxed">
+              Zero unverified autonomous pushes to main. Maintainers retain absolute sovereign review control over every proposed patch.
+            </p>
+</div>
+<div class="mt-8 p-3 rounded-xl bg-canvas border border-borderMuted font-mono text-xs flex items-center justify-between">
+<span class="text-muted">Automerge</span>
+<span class="text-chalk font-semibold">Strictly Blocked</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- TECHNOLOGY SYSTEM ARCHITECTURE MAP -->
+<section class="py-28 border-t border-borderMuted bg-surface/40" id="architecture">
+<div class="max-w-7xl mx-auto px-6 lg:px-8">
+<div class="text-center max-w-2xl mx-auto space-y-3 mb-16">
+<div class="font-mono text-xs tracking-widest text-cyan uppercase">
+          // RUNTIME INFRASTRUCTURE
+        </div>
+<h2 class="text-4xl sm:text-5xl font-bold tracking-tight text-chalk">
+          Built on real engineering infrastructure.
+        </h2>
+<p class="text-muted text-base">
+          A decoupled, security-first pipeline that bridges open source GitHub events with sandboxed Docker telemetry.
+        </p>
+</div>
+<!-- Visual Pipeline Architecture Diagram -->
+<div class="p-8 rounded-2xl bg-canvas border border-borderMuted shadow-2xl overflow-x-auto">
+<div class="min-w-[860px] flex items-center justify-between gap-3">
+<!-- Node 1 -->
+<div class="flex-1 p-4 rounded-xl bg-panel border border-borderMuted text-center space-y-2">
+<div class="w-10 h-10 mx-auto rounded-lg bg-canvas border border-borderMuted flex items-center justify-center text-chalk">
+<span class="material-symbols-outlined text-lg">folder_code</span>
+</div>
+<div class="font-sans font-semibold text-xs text-chalk">GitHub Repo</div>
+<div class="font-mono text-[10px] text-muted">Webhook Event</div>
+</div>
+<div class="text-muted font-mono">→</div>
+<!-- Node 2 -->
+<div class="flex-1 p-4 rounded-xl bg-panel border border-electric/40 text-center space-y-2 shadow-[0_0_20px_rgba(79,140,255,0.1)]">
+<div class="w-10 h-10 mx-auto rounded-lg bg-canvas border border-electric/40 flex items-center justify-center text-electric">
+<span class="material-symbols-outlined text-lg">terminal</span>
+</div>
+<div class="font-sans font-semibold text-xs text-chalk">RepoPilot Core</div>
+<div class="font-mono text-[10px] text-electric">AST Ingestion</div>
+</div>
+<div class="text-muted font-mono">→</div>
+<!-- Node 3 -->
+<div class="flex-1 p-4 rounded-xl bg-panel border border-violet/40 text-center space-y-2 shadow-[0_0_20px_rgba(139,92,246,0.1)]">
+<div class="w-10 h-10 mx-auto rounded-lg bg-canvas border border-violet/40 flex items-center justify-center text-violet">
+<span class="material-symbols-outlined text-lg">psychology</span>
+</div>
+<div class="font-sans font-semibold text-xs text-chalk">Gemma 4</div>
+<div class="font-mono text-[10px] text-violet">Diff Synthesis</div>
+</div>
+<div class="text-muted font-mono">→</div>
+<!-- Node 4 -->
+<div class="flex-1 p-4 rounded-xl bg-panel border border-cyan/40 text-center space-y-2 shadow-[0_0_20px_rgba(66,217,232,0.1)]">
+<div class="w-10 h-10 mx-auto rounded-lg bg-canvas border border-cyan/40 flex items-center justify-center text-cyan">
+<span class="material-symbols-outlined text-lg">inventory_2</span>
+</div>
+<div class="font-sans font-semibold text-xs text-chalk">Docker Sandbox</div>
+<div class="font-mono text-[10px] text-cyan">Hermetic Test Run</div>
+</div>
+<div class="text-muted font-mono">→</div>
+<!-- Node 5 -->
+<div class="flex-1 p-4 rounded-xl bg-panel border border-emeraldVerified/40 text-center space-y-2 shadow-[0_0_20px_rgba(101,214,154,0.1)]">
+<div class="w-10 h-10 mx-auto rounded-lg bg-canvas border border-emeraldVerified/40 flex items-center justify-center text-emeraldVerified">
+<span class="material-symbols-outlined text-lg">verified</span>
+</div>
+<div class="font-sans font-semibold text-xs text-chalk">Evidence Report</div>
+<div class="font-mono text-[10px] text-emeraldVerified">Attested Log</div>
+</div>
+<div class="text-muted font-mono">→</div>
+<!-- Node 6 -->
+<div class="flex-1 p-4 rounded-xl bg-panel border border-borderBright text-center space-y-2">
+<div class="w-10 h-10 mx-auto rounded-lg bg-chalk text-canvas flex items-center justify-center font-bold">
+<span class="material-symbols-outlined text-lg">person_check</span>
+</div>
+<div class="font-sans font-semibold text-xs text-chalk">Maintainer</div>
+<div class="font-mono text-[10px] text-chalk font-semibold">Human Merge</div>
+</div>
+</div>
+</div>
+<!-- Tech Stack Badges -->
+<div class="mt-8 flex flex-wrap items-center justify-center gap-3 font-mono text-xs text-muted">
+<span class="px-4 py-2 rounded-full bg-surface border border-borderMuted">React 19</span>
+<span class="px-4 py-2 rounded-full bg-surface border border-borderMuted">TypeScript 5.4</span>
+<span class="px-4 py-2 rounded-full bg-surface border border-borderMuted">Node.js</span>
+<span class="px-4 py-2 rounded-full bg-surface border border-borderMuted">Gemma 4</span>
+<span class="px-4 py-2 rounded-full bg-surface border border-borderMuted">GitHub Apps API</span>
+<span class="px-4 py-2 rounded-full bg-surface border border-borderMuted">Docker MicroVMs</span>
+<span class="px-4 py-2 rounded-full bg-surface border border-borderMuted">DigitalOcean Cloud</span>
+</div>
+</div>
+</section>
+<!-- DRAMATIC CLOSING CTA SECTION -->
+<section class="relative py-32 border-t border-borderMuted bg-canvas overflow-hidden">
+<!-- Ambient Merging Glow Vector -->
+<div class="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[340px] bg-gradient-to-t from-emeraldVerified/15 via-electric/10 to-transparent blur-[140px] -z-10"></div>
+<div class="max-w-5xl mx-auto px-6 lg:px-8 text-center space-y-8">
+<!-- Converging Git Lines Artwork -->
+<div class="relative w-full h-24 max-w-md mx-auto mb-4">
+<svg class="w-full h-full" fill="none" viewbox="0 0 400 80">
+<!-- 3 Git branches merging into 1 green branch -->
+<path d="M 40 20 C 140 20, 200 40, 280 40" stroke="#4F8CFF" stroke-dasharray="4 6" stroke-width="2"></path>
+<path d="M 40 40 C 140 40, 200 40, 280 40" stroke="#8B5CF6" stroke-width="2"></path>
+<path d="M 40 60 C 140 60, 200 40, 280 40" stroke="#42D9E8" stroke-dasharray="4 6" stroke-width="2"></path>
+<!-- Merged Output -->
+<path d="M 280 40 L 360 40" stroke="#65D69A" stroke-linecap="round" stroke-width="3"></path>
+<circle cx="280" cy="40" fill="#65D69A" r="5"></circle>
+<circle class="animate-ping" cx="360" cy="40" fill="#65D69A" r="5"></circle>
+</svg>
+</div>
+<div class="space-y-4">
+<h2 class="text-4xl sm:text-6xl font-bold tracking-tight text-chalk">
+          Make your next contribution count.
+        </h2>
+<p class="text-muted text-lg sm:text-xl max-w-2xl mx-auto leading-relaxed">
+          Let RepoPilot triage the issue, understand the code, generate the diff, and run the tests. You stay in control of what merges.
+        </p>
+</div>
+<div class="flex flex-wrap items-center justify-center gap-4 pt-4">
+<a class="px-8 py-3.5 rounded-full bg-chalk text-canvas font-mono text-xs font-semibold uppercase tracking-wider hover:bg-white transition-all shadow-[0_0_35px_rgba(245,245,247,0.35)] active:scale-95" href="#product">
+          Launch RepoPilot Free →
+        </a>
+<a class="px-8 py-3.5 rounded-full bg-panel hover:bg-panelHigh border border-borderMuted text-chalk font-mono text-xs tracking-wider transition-all" href="https://github.com" rel="noreferrer" target="_blank">
+          Star on GitHub ★ 8.4k
+        </a>
+</div>
+<!-- Live Telemetry Counter -->
+<div class="pt-10 flex flex-wrap items-center justify-center gap-6 font-mono text-xs text-muted border-t border-borderMuted/60 max-w-lg mx-auto">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-emeraldVerified"></span>
+<span class="text-chalk font-semibold">3,412</span> PRs verified today
+        </div>
+<div class="text-borderBright">|</div>
+<div>Avg triage time: <span class="text-chalk font-semibold">4m 12s</span></div>
+<div class="text-borderBright">|</div>
+<div class="text-emeraldVerified">99.98% Uptime</div>
+</div>
+</div>
+</section>
+<!-- EDITORIAL MINIMAL FOOTER -->
+<footer class="border-t border-borderMuted bg-surface py-16">
+<div class="max-w-7xl mx-auto px-6 lg:px-8">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-10 pb-12 border-b border-borderMuted">
+<div class="md:col-span-5 space-y-4">
+<div class="flex items-center gap-2.5">
+<div class="w-7 h-7 rounded-lg bg-panel flex items-center justify-center border border-borderMuted">
+<svg class="text-electric" fill="none" height="16" viewbox="0 0 24 24" width="16">
+<circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="2"></circle>
+<circle cx="18" cy="18" r="3" stroke="currentColor" stroke-width="2"></circle>
+<path d="M6 9v3a3 3 0 003 3h6" stroke="currentColor" stroke-width="2"></path>
+</svg>
+</div>
+<span class="font-sans font-semibold text-chalk text-base">RepoPilot</span>
+</div>
+<p class="text-muted text-xs font-mono max-w-sm leading-relaxed">
+            Autonomous engineering teammate built for senior software maintainers, deterministic code synthesis, and hermetic Docker test verification.
+          </p>
+<div class="font-mono text-[11px] text-cyan flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-cyan"></span>
+<span>TELEMETRY SYNCHRONIZED :: US-EAST-1</span>
+</div>
+</div>
+<div class="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-8 font-mono text-xs">
+<div class="space-y-3">
+<div class="text-chalk uppercase tracking-wider font-semibold">Navigation</div>
+<ul class="space-y-2 text-muted">
+<li><a class="hover:text-chalk transition-colors" href="#product">Product</a></li>
+<li><a class="hover:text-chalk transition-colors" href="#story">Triage Story</a></li>
+<li><a class="hover:text-chalk transition-colors" href="#workflow">Workflow</a></li>
+<li><a class="hover:text-chalk transition-colors" href="#evidence">Evidence Report</a></li>
+</ul>
+</div>
+<div class="space-y-3">
+<div class="text-chalk uppercase tracking-wider font-semibold">Platform</div>
+<ul class="space-y-2 text-muted">
+<li><a class="hover:text-chalk transition-colors" href="https://github.com">GitHub App</a></li>
+<li><a class="hover:text-chalk transition-colors" href="#architecture">Docker Sandbox</a></li>
+<li><a class="hover:text-chalk transition-colors" href="#">Security Model</a></li>
+<li><a class="hover:text-chalk transition-colors" href="#">Documentation</a></li>
+</ul>
+</div>
+<div class="space-y-3 col-span-2 sm:col-span-1">
+<div class="text-chalk uppercase tracking-wider font-semibold">Attestation</div>
+<div class="p-3 rounded-lg bg-canvas border border-borderMuted text-[11px] text-muted space-y-1">
+<div class="text-chalk">Ed25519 Signed</div>
+<div class="truncate text-[10px] text-cyan">SHA: 9f8a12c48b</div>
+<div class="text-emeraldVerified text-[10px]">Zero Data Retention</div>
+</div>
+</div>
+</div>
+</div>
+<div class="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs text-muted">
+<div>© 2026 RepoPilot Inc. Autonomous engineering for the open source commons.</div>
+<div class="flex items-center gap-4">
+<a class="hover:text-chalk transition-colors" href="#">Terms</a>
+<a class="hover:text-chalk transition-colors" href="#">Privacy</a>
+<a class="hover:text-chalk transition-colors" href="#">Security Whitepaper</a>
+</div>
+</div>
+</div>
+</footer>
+<!-- VANILLA INTERACTIVITY SCRIPT -->
+<script>
+    // 5-Stage Interactive Pipeline switcher
+    const stageData = [
+      {
+        badge: "STAGE 01 :: REPO INGESTION",
+        title: "Zero-friction GitHub Repository Ingestion",
+        desc: "Install the RepoPilot GitHub App in two clicks. The agent generates a complete semantic Abstract Syntax Tree, indexes type signatures, parses test manifests, and honors existing repository licensing rules.",
+        terminal: "repopilot-runner --stage 01 --target fastify/auth",
+        metaLatency: "1.8s for 250k LOC",
+        metaMemory: "Ephemeral vector cache",
+        logs: [
+          `<span class="text-electric">$ repopilot connect https://github.com/fastify/fastify-jwt</span>`,
+          `<span class="text-chalk">✔ Authentication handshake verified [GitHub App AppID: #40192]</span>`,
+          `<span class="text-chalk">✔ Cloning shallow HEAD (commit: 9f8a12c)</span>`,
+          `<span class="text-cyan">✔ Parsing AST syntax forest... (1,248 files indexed)</span>`,
+          `<span class="text-chalk">✔ Identifying package scripts: ["test", "test:coverage", "lint"]</span>`,
+          `<span class="text-emeraldVerified">✔ Workspace ready in sandbox microVM [0.42s]</span>`
+        ]
+      },
+      {
+        badge: "STAGE 02 :: ISSUE INVESTIGATION",
+        title: "Gemma 4 Trace Walk & Root Cause Pinpointing",
+        desc: "Ingests raw issue description, stack traces, and relevant commit deltas. Walks backward through call graphs and identifies exact lines in failure states.",
+        terminal: "gemma-4-ast --investigate --issue 128",
+        metaLatency: "3.2s inference time",
+        metaMemory: "Zero hallucination mode",
+        logs: [
+          `<span class="text-violet">$ gemma-4 trace-walk --issue #128</span>`,
+          `<span class="text-chalk">✔ Parsing stack trace from issue body...</span>`,
+          `<span class="text-cyan">✔ Symbol resolved: SessionManager.verify() in src/auth/session.ts</span>`,
+          `<span class="text-chalk">✔ Trace back: connection drop triggers unhandled promise rejection</span>`,
+          `<span class="text-emeraldVerified">✔ Target line pinpointed: src/auth/session.ts:141</span>`
+        ]
+      },
+      {
+        badge: "STAGE 03 :: PATCH SYNTHESIS",
+        title: "Synthesizing Clean, Minimal Unified Diffs",
+        desc: "Writes the minimal patch required to eliminate the bug without modifying unrelated logic or breaking code styles.",
+        terminal: "repopilot-patcher --generate --unified-diff",
+        metaLatency: "+4 / -1 lines touched",
+        metaMemory: "ESLint verified",
+        logs: [
+          `<span class="text-cyan">$ repopilot synthesize-patch</span>`,
+          `<span class="text-chalk">✔ Reading existing code conventions (.prettierrc, tsconfig.json)</span>`,
+          `<span class="text-chalk">✔ Synthesizing exponential backoff retry loop</span>`,
+          `<span class="text-emeraldVerified">✔ Diff generated: +4 lines, -1 line in src/auth/session.ts</span>`,
+          `<span class="text-chalk">✔ AST type checks: 0 diagnostics emitted</span>`
+        ]
+      },
+      {
+        badge: "STAGE 04 :: CONTAINER EXECUTION",
+        title: "Hermetic Docker MicroVM Verification",
+        desc: "Spins up an isolated container, executes the real npm test or pytest suite, collects stdout/stderr, and confirms exit code 0.",
+        terminal: "docker exec -it sbx-904f npm test",
+        metaLatency: "Container boot: 220ms",
+        metaMemory: "MicroVM destroyed post-run",
+        logs: [
+          `<span class="text-emeraldVerified">$ docker run --rm -v sbx-904f:/workspace repopilot/node:20</span>`,
+          `<span class="text-chalk">✔ Executing npm test -- tests/auth.test.ts</span>`,
+          `<span class="text-emeraldVerified">PASS tests/auth.test.ts (24 passed, 1.42s)</span>`,
+          `<span class="text-chalk">✔ All regression test suites green</span>`,
+          `<span class="text-emeraldVerified">✔ Verification attested: EXIT CODE 0</span>`
+        ]
+      },
+      {
+        badge: "STAGE 05 :: PR SUBMISSION",
+        title: "Maintainer-Ready Pull Request Synthesis",
+        desc: "Submits a verified PR with reproduction logs, evidence artifacts, and sandbox telemetry attached for maintainer review.",
+        terminal: "gh pr create --title 'Fix: redis timeout' --evidence",
+        metaLatency: "Instant GitHub PR sync",
+        metaMemory: "Awaiting maintainer approval",
+        logs: [
+          `<span class="text-chalk">$ gh pr create --evidence-attestation</span>`,
+          `<span class="text-cyan">✔ Attaching Docker test execution artifact #EP-88219</span>`,
+          `<span class="text-chalk">✔ Pull Request opened: https://github.com/fastify/jwt/pull/129</span>`,
+          `<span class="text-emeraldVerified">✔ Ready for maintainer one-click review and merge</span>`
+        ]
+      }
+    ];
+
+    function setStage(index) {
+      const btns = document.querySelectorAll('.stage-btn');
+      btns.forEach((btn, i) => {
+        if (i === index) {
+          btn.classList.add('border-electric/60', 'bg-panelHigh');
+          btn.classList.remove('border-borderMuted', 'bg-surface');
+        } else {
+          btn.classList.remove('border-electric/60', 'bg-panelHigh');
+          btn.classList.add('border-borderMuted', 'bg-surface');
+        }
+      });
+
+      const d = stageData[index];
+      document.getElementById('stageBadge').innerText = d.badge;
+      document.getElementById('stageTitle').innerText = d.title;
+      document.getElementById('stageDesc').innerText = d.desc;
+      document.getElementById('terminalTitle').innerText = d.terminal;
+      document.getElementById('stageMeta').innerHTML = `
+        <div>// Execution: <span class="text-chalk">${d.metaLatency}</span></div>
+        <div>// Safety: <span class="text-chalk">${d.metaMemory}</span></div>
+      `;
+      document.getElementById('terminalLogs').innerHTML = d.logs.join('');
+    }
+
+    // Evidence tab switcher
+    function switchEvidenceTab(tab) {
+      const btns = document.querySelectorAll('.ev-tab-btn');
+      btns.forEach(b => {
+        if (b.dataset.ev === tab) {
+          b.classList.add('border-electric', 'text-chalk');
+          b.classList.remove('border-transparent', 'text-muted');
+        } else {
+          b.classList.remove('border-electric', 'text-chalk');
+          b.classList.add('border-transparent', 'text-muted');
+        }
+      });
+
+      document.getElementById('viewDiff').classList.add('hidden');
+      document.getElementById('viewTelemetry').classList.add('hidden');
+      document.getElementById('viewAst').classList.add('hidden');
+
+      if (tab === 'diff') document.getElementById('viewDiff').classList.remove('hidden');
+      if (tab === 'telemetry') document.getElementById('viewTelemetry').classList.remove('hidden');
+      if (tab === 'ast') document.getElementById('viewAst').classList.remove('hidden');
+    }
+  </script>
+</body></html>
