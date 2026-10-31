@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import gsap from 'gsap'
-import { Activity, ArrowRight, BookOpen, CheckCircle2, GitBranch, GitPullRequest, LayoutDashboard, LogOut, ShieldCheck } from 'lucide-react'
+import { Activity, ArrowRight, BookOpen, CheckCircle2, GitBranch, LayoutDashboard, LogOut, ShieldCheck } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8001/api'
 
