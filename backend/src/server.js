@@ -11,6 +11,8 @@ const { getGeminiAnalysis, answerRepositoryQuestion, loadRepositoryContext, clon
 const { registerRepositoryRoutes } = require('./routes/repositories');
 const { registerAgentRoutes } = require('./routes/agent');
 const { registerChatRoutes } = require('./routes/chat');
+const { registerAuthRoutes } = require('./routes/auth');
+const { requireAuth } = require('./middleware/auth');
 const { state: runtimeState } = require('./runtime');
 
 const {
@@ -182,9 +184,10 @@ const parseRepo = (url) => {
   }
 };
 
-registerRepositoryRoutes(app, withAuth);
-registerAgentRoutes(app, withAuth);
-registerChatRoutes(app, withAuth);
+registerAuthRoutes(app);
+registerRepositoryRoutes(app, requireAuth);
+registerAgentRoutes(app, requireAuth);
+registerChatRoutes(app, requireAuth);
 app.get("/api/health", (_req, res) =>
   ok(res, { status: "healthy", database: dbReady ? "connected" : "memory" }),
 );
