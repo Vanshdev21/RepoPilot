@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import gsap from 'gsap'
-import { Activity, ArrowRight, BookOpen, CheckCircle2, GitBranch, LayoutDashboard, LogOut, ShieldCheck } from 'lucide-react'
+import { Activity, ArrowRight, BookOpen, Bot, CheckCircle2, GitBranch, LayoutDashboard, LogOut, Send, ShieldCheck } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8001/api'
 
@@ -14,6 +14,10 @@ export function Dashboard() {
   const [repositories, setRepositories] = useState<any[]>([])
   const [runs, setRuns] = useState<any[]>([])
   const [reports, setReports] = useState<any[]>([])
+  const [chatRepository, setChatRepository] = useState('')
+  const [chatQuestion, setChatQuestion] = useState('')
+  const [chatMessages, setChatMessages] = useState<any[]>([{ role: 'assistant', content: 'Ask me about this repository’s architecture, tech stack, files, or implementation.' }])
+  const [chatLoading, setChatLoading] = useState(false)
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -30,8 +34,28 @@ export function Dashboard() {
       if (reportsResponse.success) setReports(reportsResponse.data)
     }
     loadDashboard().catch(() => undefined)
-    gsap.from('.dash-card', { y: 24, opacity: 0, duration: 0.55, stagger: 0.08, ease: 'power3.out' })
+    gsap.fromTo('.dash-card', { y: 24, opacity: 1 }, { y: 0, opacity: 1, duration: 0.55, stagger: 0.08, ease: 'power3.out', clearProps: 'transform,opacity' })
   }, [])
+
+  async function askRepository(event: React.FormEvent) {
+    event.preventDefault()
+    if (!chatRepository || !chatQuestion.trim() || chatLoading) return
+    const repository = repositories.find(item => String(item._id || item.githubRepositoryId || item.id) === chatRepository)
+    const repositoryId = repository?._id
+    if (!repositoryId) return
+    const question = chatQuestion.trim()
+    setChatMessages(messages => [...messages, { role: 'user', content: question }])
+    setChatQuestion('')
+    setChatLoading(true)
+    try {
+      const response = await fetch(`${API}/chat/repository`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repositoryId, question, history: chatMessages }) })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error?.message || 'The repository assistant could not answer')
+      setChatMessages(messages => [...messages, { role: 'assistant', content: body.data.answer, sources: body.data.sources }])
+    } catch (error: any) {
+      setChatMessages(messages => [...messages, { role: 'assistant', content: error.message, error: true }])
+    } finally { setChatLoading(false) }
+  }
 
   const passedRuns = runs.filter(run => run.testResults?.status === 'passed').length
   const pullRequests = runs.filter(run => run.status === 'published').length
@@ -53,6 +77,12 @@ export function Dashboard() {
         {repositories.length ? repositories.map(repository => <Link className="activity-row" to="/workspace" key={repository.githubRepositoryId || repository.id || repository._id}>
           <span><GitBranch size={15}/></span><div><b>{repository.fullName}</b><small>{repository.description || 'Connected repository'}</small></div><em>{repository.primaryLanguage || repository.language || 'GitHub'}</em><ArrowRight size={16}/>
         </Link>) : <div className="activity-empty">Connect a repository to begin.</div>}
+      </section>
+      <section className="repository-chat dash-card">
+        <div className="chat-heading"><div className="chat-icon"><Bot size={20}/></div><div><span>REPOSITORY COPILOT</span><b>Ask about your codebase</b></div><i>AI ONLINE</i></div>
+        <div className="chat-repository-row"><label>Repository<select value={chatRepository} onChange={event => setChatRepository(event.target.value)}><option value="">Choose a repository</option>{repositories.map(repository => { const id = String(repository._id || repository.githubRepositoryId || repository.id); return <option key={id} value={id}>{repository.fullName}</option> })}</select></label><button type="button" onClick={() => { setChatQuestion('Explain this repository’s tech stack and architecture.'); }}>Explain tech stack</button></div>
+        <div className="chat-messages">{chatMessages.map((message, index) => <div className={`chat-message ${message.role} ${message.error ? 'error' : ''}`} key={index}><span>{message.role === 'assistant' ? <Bot size={15}/> : 'YOU'}</span><p>{message.content}</p>{message.sources?.length > 0 && <small>Context: {message.sources.slice(0, 4).join(', ')}</small>}</div>)}{chatLoading && <div className="chat-message assistant thinking"><span><Bot size={15}/></span><p>Investigating repository context…</p></div>}</div>
+        <form className="chat-composer" onSubmit={askRepository}><input value={chatQuestion} onChange={event => setChatQuestion(event.target.value)} placeholder="Ask about a function, architecture, dependencies…" disabled={!chatRepository || chatLoading}/><button type="submit" disabled={!chatRepository || !chatQuestion.trim() || chatLoading} aria-label="Send question"><Send size={16}/></button></form>
       </section>
       <div className="dashboard-actions">
         <Link className="quick-action" to="/runs"><Activity/><div><b>Agent runs</b><small>Review investigation and execution activity</small></div><ArrowRight/></Link>

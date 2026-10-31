@@ -6,6 +6,42 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 
+function buildRepositoryFallback(repository, question, files) {
+  const paths = files.map(file => file.path);
+  const packageFile = files.find(file => file.path.endsWith('package.json'));
+  let stack = 'Technology details could not be identified from the selected files.';
+  if (packageFile) {
+    try {
+      const packageJson = JSON.parse(packageFile.content);
+      const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+      const technologies = Object.keys(dependencies || {}).slice(0, 12);
+      stack = technologies.length ? `Detected dependencies: ${technologies.join(', ')}.` : 'A package.json file was found, but it declares no dependencies.';
+    } catch (_) {}
+  }
+  const sourceHint = paths.length ? `Available repository files include: ${paths.slice(0, 8).join(', ')}.` : 'No source files were available for this repository.';
+  return `I am currently using repository-context fallback mode because the configured Gemini key is unavailable.\n\nRepository: ${repository.fullName}\nQuestion: ${question}\n\n${stack}\n${sourceHint}\n\nAdd a valid Gemini API key to enable full code explanation and natural-language analysis.`;
+}
+
+async function answerRepositoryQuestion(repository, question, files, githubToken) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
+  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const context = files.map(file => `FILE ${file.path}\n${file.content.slice(0, 12000)}`).join('\n\n');
+  const prompt = `You are RepoPilot's repository engineering assistant. Answer from the supplied repository context only. Repository: ${repository.fullName}. Explain architecture, code behavior, tech stack, dependencies, and tradeoffs clearly. Admit when the repository context is insufficient.\n\nRepository context:\n${context}\n\nUser question:\n${question}`;
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } })
+  });
+  const body = await response.json();
+  if (!response.ok) {
+    if (body.error?.status === 'INVALID_ARGUMENT' || response.status === 400 || response.status === 401) {
+      return buildRepositoryFallback(repository, question, files);
+    }
+    throw new Error(body.error?.message || 'Gemini API request failed');
+  }
+  return body.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim() || buildRepositoryFallback(repository, question, files);
+}
+
 async function runCommand(command, args, options = {}) {
   try {
     const result = await execFileAsync(command, args, { ...options, timeout: 120000, maxBuffer: 5 * 1024 * 1024 });
@@ -108,4 +144,4 @@ async function publishToGitHub(repository, issue, workspace, relevantFiles, gith
   return { number: pull.number, url: pull.html_url, state: pull.state };
 }
 
-module.exports = { getGeminiAnalysis, loadRepositoryContext, cloneAndTest, publishToGitHub, hash: value => `sha256:${crypto.createHash('sha256').update(value).digest('hex')}` };
+module.exports = { getGeminiAnalysis, answerRepositoryQuestion, loadRepositoryContext, cloneAndTest, publishToGitHub, hash: value => `sha256:${crypto.createHash('sha256').update(value).digest('hex')}` };

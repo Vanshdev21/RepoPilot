@@ -7,7 +7,7 @@ const mongoose = require("mongoose");
 const crypto = require("crypto");
 const session = require("express-session");
 const MongoStore = require("connect-mongo").default;
-const { getGeminiAnalysis, loadRepositoryContext, cloneAndTest, publishToGitHub, hash } = require("./services/agentService");
+const { getGeminiAnalysis, answerRepositoryQuestion, loadRepositoryContext, cloneAndTest, publishToGitHub, hash } = require("./services/agentService");
 
 const {
   User,
@@ -345,6 +345,19 @@ app.get("/api/repositories/:id", async (req, res) => {
     ? await Repository.findById(req.params.id)
     : memory.repositories.get(req.params.id);
   repo ? ok(res, repo) : fail(res, 404, "NOT_FOUND", "Repository not found.");
+});
+
+app.post("/api/chat/repository", withAuth, async (req, res, next) => {
+  try {
+    const { repositoryId, question, history = [] } = req.body;
+    if (!repositoryId || !String(question || "").trim()) return fail(res, 400, "VALIDATION_ERROR", "repositoryId and question are required.");
+    const repository = dbReady ? await Repository.findOne({ _id: repositoryId, connectedBy: req.user._id }) : memory.repositories.get(repositoryId);
+    if (!repository) return fail(res, 404, "NOT_FOUND", "Repository not found.");
+    const contextFiles = await loadRepositoryContext(repository, { title: "Repository architecture and code explanation", body: String(question).slice(0, 500) }, req.session.githubToken);
+    const contextualQuestion = history.length ? `Conversation history:\n${history.slice(-6).map(message => `${message.role}: ${message.content}`).join('\n')}\n\nQuestion: ${question}` : question;
+    const answer = await answerRepositoryQuestion(repository, contextualQuestion, contextFiles, req.session.githubToken);
+    ok(res, { answer, repository: repository.fullName, sources: contextFiles.map(file => file.path) });
+  } catch (error) { next(error); }
 });
 
 app.post("/api/agent/analyze", withAuth, async (req, res, next) => {
