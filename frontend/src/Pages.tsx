@@ -136,6 +136,14 @@ export function Workspace(){
       setMessage(action === 'test' ? 'Docker validation complete' : action === 'approve' ? 'Patch approved' : 'Pull request prepared')
     } catch (error:any) { setMessage(error.message) } finally { setBusy(false) }
   }
+  async function enableIssueAgent(autoApprove = false) {
+    if (!repository) return;
+    setBusy(true)
+    try {
+      await request(`/repositories/${repository._id}/monitor`, { method:'POST', body:JSON.stringify({autoApprove}) })
+      setMessage(autoApprove ? 'Issue agent enabled and Docker-verified PR publishing enabled' : 'Automatic issue monitoring enabled — patches still require approval')
+    } catch (error:any) { setMessage(error.message) } finally { setBusy(false) }
+  }
   async function analyzeIssue() {
     if (!repository || !selected) return
     setBusy(true)
@@ -148,11 +156,12 @@ export function Workspace(){
   return <WorkspaceLayout title="WORKSPACE"><div className="workspace-page">
     <div className="dashboard-title"><div><span className="eyebrow">ISSUE-TO-PR</span><h1>Repository workspace</h1></div></div>
     <label className="repo-search"><GitBranch/><input value={url} onChange={e=>setUrl(e.target.value)} placeholder="github.com/owner/repository"/><button className="button primary" onClick={() => connectRepository()} disabled={busy}>{busy?'Working...':'Connect repository'} <ArrowRight size={15}/></button></label>
+    {repository && <div className="monitor-actions"><button className="button ghost" disabled={busy} onClick={()=>enableIssueAgent(false)}>Enable issue agent</button><button className="button primary" disabled={busy} onClick={()=>enableIssueAgent(true)}>Enable verified auto PR</button></div>}
     {githubRepositories.length > 0 && <div className="github-projects"><div className="panel-title">YOUR GITHUB REPOSITORIES</div><div>{githubRepositories.map(item=><button key={item.id} onClick={()=>selectGithubRepository(item.fullName)}><b>{item.fullName}</b><span>{item.private ? 'private' : 'public'} · {item.language || 'Other'}</span></button>)}</div></div>}
     {message && <div className="workspace-message">{message}</div>}
     <div className="workspace-columns">
       <section><div className="panel-title">OPEN ISSUES <small>{issues.length} visible</small></div>{repository && <div className="connected-repository"><GitBranch size={15}/><b>{repository.fullName}</b></div>}{issues.length > 0 ? issues.map(issue=><button key={issue.number} onClick={()=>setSelected(issue)} className={`issue-picker ${selected?.number===issue.number?'selected':''}`}><span>#{issue.number}</span><b>{issue.title}</b><small>{issue.labels[0] || 'issue'}</small></button>) : <div className="empty-investigation compact"><GitBranch/><b>{repository ? 'No open issues found' : 'Choose a repository'}</b><p>{repository ? 'This repository is connected. Create or open a GitHub issue to start an AI investigation.' : 'Select one of your GitHub repositories to load its issues.'}</p></div>}</section>
-      <section><div className="panel-title">AI INVESTIGATION</div>{run ? <div className="run-result"><span>{run.classification}</span><h2>{run.summary}</h2><p>{run.rootCause}</p>{run.relevantFiles.map((file:string)=><code key={file}>{file}</code>)}<div className="agent-actions"><button className="button ghost" disabled={busy} onClick={()=>executeRunAction('test')}>Run Docker tests</button><button className="button ghost" disabled={busy || run.testResults?.status !== 'passed'} onClick={()=>executeRunAction('approve')}>Approve patch</button><button className="button primary" disabled={busy || run.approvalState !== 'approved'} onClick={()=>executeRunAction('pull-request')}>Open pull request</button></div></div> : <div className="empty-investigation"><Activity/><b>{selected ? selected.title : 'Select an issue to begin'}</b><p>{selected ? 'Repository context is ready for the AI investigation.' : 'RepoPilot will identify relevant files, formulate a hypothesis, and generate a reviewable patch.'}</p>{selected && <button className="button primary" onClick={analyzeIssue}>Run AI investigation <ArrowRight size={15}/></button>}</div>}</section>
+      <section><div className="panel-title">AI INVESTIGATION</div>{run ? <div className="run-result"><span>{run.classification}</span>{run.confidence != null && <small className="run-confidence">AI confidence: {run.confidence}%</small>}<h2>{run.summary}</h2><p>{run.rootCause}</p>{run.validationNotes && <div className="validation-notes"><b>Agent validation</b><p>{run.validationNotes}</p></div>}{run.status === 'not_actionable' ? <div className="workspace-message">No safe code change was generated. RepoPilot did not modify this repository or open a pull request.</div> : <>{run.relevantFiles.map((file:string)=><code key={file}>{file}</code>)}<div className="agent-actions"><button className="button ghost" disabled={busy} onClick={()=>executeRunAction('test')}>Run Docker tests</button><button className="button ghost" disabled={busy || run.testResults?.status !== 'passed'} onClick={()=>executeRunAction('approve')}>Approve patch</button><button className="button primary" disabled={busy || run.approvalState !== 'approved'} onClick={()=>executeRunAction('pull-request')}>Open pull request</button></div></>}</div> : <div className="empty-investigation"><Activity/><b>{selected ? selected.title : 'Select an issue to begin'}</b><p>{selected ? 'Repository context is ready for the AI investigation.' : 'RepoPilot will identify relevant files, formulate a hypothesis, and generate a reviewable patch.'}</p>{selected && <button className="button primary" onClick={analyzeIssue}>Run AI investigation <ArrowRight size={15}/></button>}</div>}</section>
     </div>
   </div></WorkspaceLayout>
 }

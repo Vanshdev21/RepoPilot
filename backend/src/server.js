@@ -24,7 +24,7 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "1mb", verify: (req, _res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
 app.use(
   session({
     name: "repopilot.sid",
@@ -45,6 +45,33 @@ app.use(morgan("tiny"));
 
 let dbReady = false;
 const memory = { repositories: new Map(), runs: new Map(), events: new Map() };
+const persistRun = async run => {
+  if (!dbReady) return run;
+  const existing = run.runId ? await AgentRun.findOne({ runId: run.runId }) : null;
+  const data = { ...run, runId: run._id, workspace: run.workspace };
+  delete data._id;
+  if (existing) return AgentRun.findOneAndUpdate({ _id: existing._id }, data, { new: true });
+  return AgentRun.create(data);
+};
+const getStoredRun = async runId => {
+  if (memory.runs.has(runId)) return memory.runs.get(runId);
+  if (!dbReady) return null;
+  const run = mongoose.isValidObjectId(runId)
+    ? await AgentRun.findById(runId).catch(() => null)
+    : null;
+  const byRunId = run || await AgentRun.findOne({ runId });
+  if (!byRunId) return null;
+  const plain = byRunId.toObject();
+  plain._id = plain.runId || String(plain._id);
+  memory.runs.set(plain._id, plain);
+  return plain;
+};
+const listStoredRuns = async userId => {
+  const memoryRuns = [...memory.runs.values()].filter(run => String(run.userId) === String(userId));
+  if (!dbReady) return memoryRuns;
+  const dbRuns = await AgentRun.find({ userId }).sort({ createdAt: -1 }).lean();
+  return dbRuns.map(run => ({ ...run, _id: run.runId || String(run._id) }));
+};
 const ok = (res, data, meta = {}) =>
   res.json({
     success: true,
@@ -92,13 +119,13 @@ const withAuth = async (req, res, next) => {
   }
 };
 
-async function github(path, token) {
+async function github(path, token, options = {}) {
   const headers = {
     Accept: "application/vnd.github+json",
     "User-Agent": "RepoPilot/1.0",
   };
   if (token) headers.Authorization = "Bearer " + token;
-  const r = await fetch(`https://api.github.com${path}`, { headers });
+  const r = await fetch(`https://api.github.com${path}`, { method: options.method || "GET", headers: { ...headers, ...(options.body ? { "Content-Type": "application/json" } : {}) }, ...(options.body ? { body: JSON.stringify(options.body) } : {}) });
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {
     const error = new Error(body.message || `GitHub ${r.status}: ${r.statusText}`);
@@ -108,6 +135,37 @@ async function github(path, token) {
   }
   return body;
 }
+async function processIssueWebhook(fullName, issue) {
+  if (!dbReady) return;
+  const repo = await Repository.findOne({ fullName, monitoringEnabled: true });
+  if (!repo) return;
+  const owner = await User.findById(repo.connectedBy);
+  const token = owner?.githubAccessToken;
+  if (!token) throw new Error("The repository owner must relink GitHub to enable automatic issue processing.");
+  const githubIssue = await github(`/repos/${fullName}/issues/${issue.number}`, token);
+  const files = await loadRepositoryContext(repo, githubIssue, token);
+  const analysis = await getGeminiAnalysis(githubIssue, files, repo);
+  const patch = String(analysis.patch || "");
+  if (analysis.shouldFix !== true || Number(analysis.confidence || 0) < 70 || !patch.startsWith("diff --git") || !analysis.relevantFiles?.length) return;
+  const branch = await github(`/repos/${fullName}/branches/${encodeURIComponent(repo.defaultBranch)}`, token);
+  const run = { _id: `run_${crypto.randomBytes(6).toString("hex")}`, userId: repo.connectedBy, repositoryId: String(repo._id), issueNumber: issue.number, issueSnapshot: { title: githubIssue.title, body: githubIssue.body || "", htmlUrl: githubIssue.html_url }, status: "testing", classification: analysis.classification || "bug", summary: analysis.summary || githubIssue.title, rootCause: analysis.rootCause || "The agent verified the reported defect.", relevantFiles: analysis.relevantFiles, generatedPatch: patch, patchSha256: hash(patch), baseCommitSha: branch.commit.sha, testResults: { status: "not_run" }, approvalState: "pending", confidence: Number(analysis.confidence || 0), suggestedTestCommand: analysis.testCommand || "npm test", createdAt: new Date(), updatedAt: new Date() };
+  memory.runs.set(run._id, run);
+  await persistRun(run);
+  const test = await cloneAndTest(repo, patch, run.suggestedTestCommand, token);
+  run.workspace = test.workspace;
+  run.testResults = test;
+  run.status = test.status === "passed" ? "ready_for_review" : "failed";
+  await persistRun(run);
+  if (repo.autoApprove && test.status === "passed") {
+    run.approvalState = "approved";
+    run.status = "approved";
+    const pullRequest = await publishToGitHub(repo, { number: issue.number, title: githubIssue.title }, run.workspace, run.relevantFiles, token, run.baseCommitSha);
+    run.status = "published";
+    run.pullRequest = pullRequest;
+    await persistRun(run);
+  }
+}
+
 const parseRepo = (url) => {
   try {
     const u = new URL(url);
@@ -190,6 +248,7 @@ app.get("/api/auth/github/callback", async (req, res, next) => {
           username: profile.login,
           name: profile.name || profile.login,
           avatarUrl: profile.avatar_url,
+          githubAccessToken: token.access_token,
         },
         { new: true, upsert: true, setDefaultsOnInsert: true },
       );
@@ -326,6 +385,7 @@ app.get("/api/repositories/:id/issues/:number", withAuth, async (req, res, next)
     if (!repo) return fail(res, 404, "NOT_FOUND", "Repository not found");
     const issue = await github(
       `/repos/${repo.fullName}/issues/${req.params.number}`,
+      req.session.githubToken,
     );
     ok(res, {
       number: issue.number,
@@ -340,6 +400,44 @@ app.get("/api/repositories/:id/issues/:number", withAuth, async (req, res, next)
     next(e);
   }
 });
+app.post("/api/repositories/:id/monitor", withAuth, async (req, res, next) => {
+  try {
+    const repo = await Repository.findOne({ _id: req.params.id, connectedBy: req.user._id });
+    if (!repo) return fail(res, 404, "NOT_FOUND", "Repository not found.");
+    const callbackUrl = process.env.GITHUB_WEBHOOK_URL || `${process.env.API_PUBLIC_URL || "http://localhost:8001"}/api/webhooks/github`;
+    const secret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (!secret) return fail(res, 503, "WEBHOOK_NOT_CONFIGURED", "GITHUB_WEBHOOK_SECRET is not configured on the backend.");
+    if (!repo.webhookId) {
+      const hooks = await github(`/repos/${repo.fullName}/hooks`, req.session.githubToken);
+      const existing = hooks.find(hook => hook.config?.url === callbackUrl);
+      if (existing) repo.webhookId = existing.id;
+      else {
+        const created = await github(`/repos/${repo.fullName}/hooks`, req.session.githubToken, { method: "POST", body: { name: "web", active: true, events: ["issues"], config: { url: callbackUrl, content_type: "json", secret, insecure_ssl: "0" } } });
+        repo.webhookId = created.id;
+      }
+    }
+    repo.monitoringEnabled = true;
+    repo.autoApprove = req.body.autoApprove === true;
+    await repo.save();
+    ok(res, { monitoringEnabled: true, webhookId: repo.webhookId, autoApprove: repo.autoApprove });
+  } catch (error) { next(error); }
+});
+
+app.post("/api/webhooks/github", async (req, res, next) => {
+  try {
+    const signature = req.get("X-Hub-Signature-256") || "";
+    const secret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (!secret || signature !== `sha256=${crypto.createHmac("sha256", secret).update(req.rawBody || Buffer.alloc(0)).digest("hex")}`)
+      return fail(res, 401, "INVALID_WEBHOOK_SIGNATURE", "Webhook signature is invalid.");
+    if (req.get("X-GitHub-Event") !== "issues" || !["opened", "reopened"].includes(req.body.action)) return res.sendStatus(204);
+    const issue = req.body.issue;
+    const fullName = req.body.repository?.full_name;
+    if (!issue || issue.pull_request || !fullName) return res.sendStatus(204);
+    res.sendStatus(202);
+    processIssueWebhook(fullName, issue).catch(error => console.error("RepoPilot webhook agent failed:", error.message));
+  } catch (error) { next(error); }
+});
+
 app.get("/api/repositories/:id", async (req, res) => {
   const repo = dbReady
     ? await Repository.findById(req.params.id)
@@ -371,48 +469,69 @@ app.post("/api/agent/analyze", withAuth, async (req, res, next) => {
     const files = await loadRepositoryContext(repo, issue, req.session.githubToken);
     const analysis = await getGeminiAnalysis(issue, files, repo);
     const patch = String(analysis.patch || "");
-    if (!patch.startsWith("diff --git") || !Array.isArray(analysis.relevantFiles)) throw new Error("Gemini returned an invalid or unsafe patch");
+    const confidence = Number(analysis.confidence || 0);
+    if (analysis.shouldFix !== true) {
+      const run = {
+        _id: `run_${crypto.randomBytes(6).toString("hex")}`, userId: req.user._id, repositoryId: String(repo._id), issueNumber,
+        issueSnapshot: { title: issue.title, body: issue.body || "", htmlUrl: issue.html_url }, status: "not_actionable",
+        classification: analysis.classification || "other", summary: analysis.summary || "Issue was not confirmed as actionable", rootCause: analysis.rootCause || "The report could not be verified against repository code.",
+        relevantFiles: [], generatedPatch: "", patchSha256: null, baseCommitSha: null, testResults: { status: "not_run" },
+        approvalState: "not_required", confidence, validationNotes: analysis.validationNotes || "The issue needs more evidence before a code change is safe.", createdAt: new Date(), updatedAt: new Date()
+      };
+      memory.runs.set(run._id, run);
+      await persistRun(run);
+      return ok(res, run);
+    }
+    if (!files.length) throw new Error("Not enough repository source context was available to safely fix this issue");
+    if (confidence < 70 || !patch.startsWith("diff --git") || !Array.isArray(analysis.relevantFiles) || !analysis.relevantFiles.length) throw new Error("The AI did not produce a sufficiently verified and applicable patch. Add more reproduction details to the issue or improve repository test coverage.");
+    const diffPaths = [...patch.matchAll(/^diff --git a\/([^ ]+) b\/([^\s]+)$/gm)].map(match => match[2]);
+    if (!diffPaths.length || diffPaths.some(file => analysis.relevantFiles.includes(file) === false || file.startsWith('../') || file.startsWith('/'))) throw new Error("Gemini returned an unsafe patch with unverified file paths");
     const branch = await github(`/repos/${repo.fullName}/branches/${encodeURIComponent(repo.defaultBranch)}`, req.session.githubToken);
     const run = {
       _id: `run_${crypto.randomBytes(6).toString("hex")}`, userId: req.user._id, repositoryId: String(repo._id), issueNumber,
       issueSnapshot: { title: issue.title, body: issue.body || "", htmlUrl: issue.html_url }, status: "ready_for_review",
       classification: analysis.classification || "bug", summary: analysis.summary || issue.title, rootCause: analysis.rootCause || "Root cause was identified by the agent.",
       relevantFiles: analysis.relevantFiles, generatedPatch: patch, patchSha256: hash(patch), baseCommitSha: branch.commit.sha,
-      testResults: { status: "not_run" }, approvalState: "pending", createdAt: new Date(), updatedAt: new Date()
+      testResults: { status: "not_run" }, approvalState: "pending", confidence, validationNotes: analysis.validationNotes || analysis.proposedFix || "Issue and repository context were reviewed before patch generation.",
+      suggestedTestCommand: analysis.testCommand || 'npm test', createdAt: new Date(), updatedAt: new Date()
     };
     memory.runs.set(run._id, run);
+    await persistRun(run);
     ok(res, run);
   } catch (error) { next(error); }
 });
-app.get("/api/agent/runs", withAuth, (req, res) => {
-  const runs = [...memory.runs.values()]
-    .filter(run => String(run.userId) === String(req.user._id))
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  ok(res, runs);
+app.get("/api/agent/runs", withAuth, async (req, res, next) => {
+  try {
+    const runs = await listStoredRuns(req.user._id);
+    ok(res, runs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+  } catch (error) { next(error); }
 });
-app.get("/api/agent/:runId", withAuth, (req, res) => {
-  const run = memory.runs.get(req.params.runId);
-  run ? ok(res, run) : fail(res, 404, "NOT_FOUND", "Run not found.");
+app.get("/api/agent/:runId", withAuth, async (req, res) => {
+  const run = await getStoredRun(req.params.runId);
+  if (!run || String(run.userId) !== String(req.user._id)) return fail(res, 404, "NOT_FOUND", "Run not found.");
+  ok(res, run);
 });
 app.post("/api/agent/:runId/test", withAuth, async (req, res, next) => {
   try {
-    const run = memory.runs.get(req.params.runId);
+    const run = await getStoredRun(req.params.runId);
     if (!run || String(run.userId) !== String(req.user._id)) return fail(res, 404, "NOT_FOUND", "Run not found");
     const repo = dbReady ? await Repository.findById(run.repositoryId) : memory.repositories.get(run.repositoryId);
     if (!repo) return fail(res, 404, "NOT_FOUND", "Repository not found");
     run.status = "testing";
-    const test = await cloneAndTest(repo, run.generatedPatch, req.body.testCommand || 'npm test', req.session.githubToken);
+    const test = await cloneAndTest(repo, run.generatedPatch, req.body.testCommand || run.suggestedTestCommand || 'npm test', req.session.githubToken);
     run.workspace = test.workspace;
     run.testResults = test;
     run.status = test.status === "passed" ? "ready_for_review" : "failed";
+    await persistRun(run);
     ok(res, run);
   } catch (error) { next(error); }
 });
-app.post("/api/agent/:runId/approve", (req, res) => {
-  const run = memory.runs.get(req.params.runId);
-  if (!run) return fail(res, 404, "NOT_FOUND", "Run not found");
+app.post("/api/agent/:runId/approve", withAuth, async (req, res) => {
+  const run = await getStoredRun(req.params.runId);
+  if (!run || String(run.userId) !== String(req.user._id)) return fail(res, 404, "NOT_FOUND", "Run not found");
   run.approvalState = "approved";
   run.status = "approved";
+  await persistRun(run);
   ok(res, {
     approved: true,
     runId: run._id,
@@ -422,7 +541,7 @@ app.post("/api/agent/:runId/approve", (req, res) => {
 });
 app.post("/api/agent/:runId/pull-request", withAuth, async (req, res, next) => {
   try {
-    const run = memory.runs.get(req.params.runId);
+    const run = await getStoredRun(req.params.runId);
     if (!run || String(run.userId) !== String(req.user._id)) return fail(res, 404, "NOT_FOUND", "Run not found");
     if (run.approvalState !== "approved") return fail(res, 409, "APPROVAL_REQUIRED", "The patch must be explicitly approved before publishing.");
     if (run.testResults.status !== "passed") return fail(res, 409, "TESTS_REQUIRED", "Docker tests must pass before pull request creation.");
@@ -431,17 +550,21 @@ app.post("/api/agent/:runId/pull-request", withAuth, async (req, res, next) => {
     const pullRequest = await publishToGitHub(repo, issue, run.workspace, run.relevantFiles, req.session.githubToken, run.baseCommitSha);
     run.status = "published";
     run.pullRequest = pullRequest;
+    await persistRun(run);
     ok(res, pullRequest);
   } catch (error) { next(error); }
 });
-app.get("/api/reports", withAuth, (req, res) => {
-  const reports = [...memory.runs.values()]
+app.get("/api/reports", withAuth, async (req, res, next) => {
+  try {
+  const runs = await listStoredRuns(req.user._id);
+  const reports = runs
     .filter(run => String(run.userId) === String(req.user._id) && run.testResults?.status === "passed")
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   ok(res, reports);
+  } catch (error) { next(error); }
 });
-app.get("/api/reports/:runId", withAuth, (req, res) => {
-  const run = memory.runs.get(req.params.runId);
+app.get("/api/reports/:runId", withAuth, async (req, res) => {
+  const run = await getStoredRun(req.params.runId);
   if (!run || String(run.userId) !== String(req.user._id)) return fail(res, 404, "NOT_FOUND", "Run not found.");
   ok(res, {
     runId: run._id,

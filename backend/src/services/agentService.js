@@ -54,25 +54,30 @@ async function runCommand(command, args, options = {}) {
 async function getGeminiAnalysis(issue, files, repository) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
-  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-  const prompt = `You are a senior software engineer fixing a GitHub issue. Respond with valid JSON only.
+  const models = [...new Set([process.env.GEMINI_MODEL || 'gemini-2.5-flash', 'gemini-2.5-flash'])];
+  const prompt = `You are RepoPilot's senior repository-fixing agent. Do two jobs in one response, and return valid JSON only.
 Repository: ${repository.fullName}
 Issue #${issue.number}: ${issue.title}
 Description: ${issue.body || 'No description'}
-Relevant repository files and contents:
+Available source context:
 ${files.map(file => `FILE ${file.path}\n${file.content.slice(0, 16000)}`).join('\n\n')}
-Return JSON with keys: classification, summary, rootCause, relevantFiles, proposedFix, patch, testCommand.
-classification must be bug, feature, documentation, enhancement, question, or other.
-patch must be a unified git diff that can be applied. Every changed file must be listed in relevantFiles. testCommand should be a safe package script such as npm test -- --runInBand, npm test, or true.`;
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } })
-  });
-  const body = await response.json();
-  if (!response.ok) throw new Error(body.error?.message || 'Gemini API request failed');
-  const text = body.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('') || '{}';
-  const cleaned = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-  return JSON.parse(cleaned);
+First decide whether this issue is a real, actionable, repository-specific defect that can be fixed with the supplied context. Set shouldFix true only when evidence supports the report and a safe source change is possible. Never fabricate paths, APIs, or source files. Set shouldFix false for duplicates, feature requests, questions, vague reports, or reports unsupported by the repository context.
+If shouldFix is false, still provide summary, rootCause, relevantFiles ([]), patch (""), and testCommand ("true").
+If shouldFix is true, provide a complete unified git diff that applies to repository root. Every changed file must be in relevantFiles. Make a minimal correct fix and include regression tests when the project structure supports them. testCommand must be safe. Prefer test scripts already present in package.json; otherwise use the project language's standard focused test command or "true".
+Return keys: shouldFix, confidence (0-100), classification, summary, rootCause, relevantFiles, proposedFix, patch, testCommand, validationNotes.`;
+  let lastError = '';
+  for (const model of models) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } })
+    });
+    const body = await response.json();
+    if (!response.ok) { lastError = body.error?.message || `Gemini model ${model} failed`; continue; }
+    const text = body.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('') || '{}';
+    const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+    try { return JSON.parse(cleaned); } catch (_) { lastError = 'Gemini returned invalid JSON'; }
+  }
+  throw new Error(lastError || 'Gemini API request failed');
 }
 
 async function loadRepositoryContext(repository, issue, githubToken) {
@@ -82,12 +87,12 @@ async function loadRepositoryContext(repository, issue, githubToken) {
   if (!treeResponse.ok) throw new Error('Could not retrieve repository tree');
   const tree = await treeResponse.json();
   const keywords = `${issue.title} ${issue.body || ''}`.toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) || [];
-  const candidates = tree.tree.filter(item => item.type === 'blob' && /\.(js|jsx|ts|tsx|py|go|java|json)$/.test(item.path))
+  const candidates = tree.tree.filter(item => item.type === 'blob' && /\.(js|jsx|ts|tsx|py|go|java|json|css|html|md)$/.test(item.path))
     .map(item => ({ ...item, score: keywords.filter(word => item.path.toLowerCase().includes(word)).length }))
-    .filter(item => item.score > 0 || /(readme|package\.json|test|spec)/i.test(item.path))
-    .sort((a, b) => b.score - a.score).slice(0, 10);
+    .filter(item => item.score > 0 || /(readme|package\.json|requirements\.txt|pyproject\.toml|test|spec)/i.test(item.path))
+    .sort((a, b) => b.score - a.score).slice(0, 24);
   const files = [];
-  for (const item of candidates.slice(0, 6)) {
+  for (const item of candidates.slice(0, 12)) {
     const fileResponse = await fetch(`https://api.github.com/repos/${repository.fullName}/contents/${encodeURIComponent(item.path)}?ref=${encodeURIComponent(repository.defaultBranch)}`, { headers });
     if (!fileResponse.ok) continue;
     const file = await fileResponse.json();
@@ -127,18 +132,33 @@ async function publishToGitHub(repository, issue, workspace, relevantFiles, gith
   }
   if (!files.length) throw new Error('The generated patch does not contain an uploadable text file change');
 
-  const forkResponse = await fetch('https://api.github.com/user/repos', { method: 'POST', headers, body: JSON.stringify({ name: repository.name, private: false }) });
-  if (!forkResponse.ok && forkResponse.status !== 422) throw new Error('Could not prepare repository fork');
-  const forkData = forkResponse.ok ? await forkResponse.json() : null;
   const ownerResponse = await fetch('https://api.github.com/user', { headers });
+  if (!ownerResponse.ok) throw new Error('Could not retrieve GitHub user for pull request publishing');
   const owner = await ownerResponse.json();
-  const forkFullName = forkData?.full_name || `${owner.login}/${repository.name}`;
-  const branch = `repopilot/fix-${issue.number}-${Date.now()}`;
-  await fetch(`https://api.github.com/repos/${forkFullName}/git/refs`, { method: 'POST', headers, body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: baseCommitSha }) });
-  for (const file of files) {
-    await fetch(`https://api.github.com/repos/${forkFullName}/contents/${encodeURIComponent(file.path)}`, { method: 'PUT', headers, body: JSON.stringify({ message: `Fix issue #${issue.number}: ${issue.title}`.slice(0, 80), content: Buffer.from(file.content).toString('base64'), branch }) });
+  const repositoryOwner = repository.fullName.split('/')[0];
+  const userOwnsRepository = repositoryOwner.toLowerCase() === owner.login.toLowerCase();
+  let publishRepository = repository.fullName;
+  let headOwner = owner.login;
+  if (!userOwnsRepository) {
+    const forkResponse = await fetch(`https://api.github.com/repos/${repository.fullName}/forks`, { method: 'POST', headers });
+    if (!forkResponse.ok && forkResponse.status !== 202) throw new Error('Could not create a repository fork');
+    publishRepository = `${owner.login}/${repository.name}`;
+    headOwner = owner.login;
+    await new Promise(resolve => setTimeout(resolve, 1500));
   }
-  const pullResponse = await fetch(`https://api.github.com/repos/${repository.fullName}/pulls`, { method: 'POST', headers, body: JSON.stringify({ title: `Fix #${issue.number}: ${issue.title}`, head: `${owner.login}:${branch}`, base: repository.defaultBranch, body: `## RepoPilot evidence\n\nAI-generated and Docker-verified fix for #${issue.number}.\n\nBase commit: \`${baseCommitSha}\`\n\nHuman review required before merge.` }) });
+  const branch = `repopilot/fix-${issue.number}-${Date.now()}`;
+  const refResponse = await fetch(`https://api.github.com/repos/${publishRepository}/git/refs/heads/${encodeURIComponent(repository.defaultBranch)}`, { headers });
+  const refData = await refResponse.json();
+  if (!refResponse.ok) throw new Error(`Could not find publishing branch: ${refData.message || ''}`);
+  const branchResponse = await fetch(`https://api.github.com/repos/${publishRepository}/git/refs`, { method: 'POST', headers, body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: refData.object.sha }) });
+  if (!branchResponse.ok) { const body = await branchResponse.json(); throw new Error(body.message || 'Could not create fix branch'); }
+  for (const file of files) {
+    const currentResponse = await fetch(`https://api.github.com/repos/${publishRepository}/contents/${encodeURIComponent(file.path)}?ref=${encodeURIComponent(branch)}`, { headers });
+    const current = await currentResponse.json();
+    const updateResponse = await fetch(`https://api.github.com/repos/${publishRepository}/contents/${encodeURIComponent(file.path)}`, { method: 'PUT', headers, body: JSON.stringify({ message: `Fix issue #${issue.number}: ${issue.title}`.slice(0, 80), content: Buffer.from(file.content).toString('base64'), branch, sha: currentResponse.ok ? current.sha : undefined }) });
+    if (!updateResponse.ok) { const body = await updateResponse.json(); throw new Error(`Could not update ${file.path}: ${body.message || 'GitHub API error'}`); }
+  }
+  const pullResponse = await fetch(`https://api.github.com/repos/${repository.fullName}/pulls`, { method: 'POST', headers, body: JSON.stringify({ title: `Fix #${issue.number}: ${issue.title}`, head: `${headOwner}:${branch}`, base: repository.defaultBranch, body: `## RepoPilot evidence\n\nAI-reviewed and Docker-verified fix for #${issue.number}.\n\nBase commit: \`${baseCommitSha}\`\n\nHuman review required before merge.` }) });
   const pull = await pullResponse.json();
   if (!pullResponse.ok) throw new Error(pull.message || 'Could not create pull request');
   return { number: pull.number, url: pull.html_url, state: pull.state };
