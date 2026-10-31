@@ -385,16 +385,6 @@ Contributions, feedback, and suggestions are welcome.
 
 Please avoid committing secrets, credentials, generated build files, or unrelated changes.
 
-## Team
-
-**RepoPilot** is being developed as a collaborative hackathon project.
-
-Add the contributors and their GitHub profiles here:
-
-- **Project lead:** YOUR NAME — [GitHub profile](https://github.com/YOUR-USERNAME)
-- **Team member:** TEAMMATE NAME — [GitHub profile](https://github.com/TEAMMATE-USERNAME)
-- **Team member:** TEAMMATE NAME — [GitHub profile](https://github.com/TEAMMATE-USERNAME)
-
 ## License
 
 Choose and add a license before distributing the project. Until a license file is added, do not assume that the repository is open for unrestricted reuse.
