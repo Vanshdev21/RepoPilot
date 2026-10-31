@@ -302,47 +302,6 @@ app.get("/api/github/repos", withAuth, async (req, res, next) => {
     next(error);
   }
 });
-app.post("/api/repositories/connect", withAuth, async (req, res, next) => {
-  try {
-    const parsed = parseRepo(req.body.repositoryUrl || req.body.url || "");
-    if (!parsed)
-      return fail(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "Must be a valid public GitHub repository URL.",
-      );
-    const repo = await github(`/repos/${parsed.owner}/${parsed.name}`, req.session.githubToken);
-    const record = {
-      _id: dbReady
-        ? undefined
-        : `repo_${crypto.randomBytes(5).toString("hex")}`,
-      githubRepositoryId: repo.id,
-      owner: repo.owner.login,
-      name: repo.name,
-      fullName: repo.full_name,
-      htmlUrl: repo.html_url,
-      defaultBranch: repo.default_branch,
-      primaryLanguage: repo.language,
-      description: repo.description,
-      visibility: repo.private ? "private" : "public",
-      indexingStatus: "completed",
-      connectedBy: req.user._id,
-      updatedAt: new Date(),
-    };
-    let saved = record;
-    if (dbReady) {
-      saved = await Repository.findOneAndUpdate(
-        { connectedBy: req.user._id, githubRepositoryId: repo.id },
-        record,
-        { new: true, upsert: true, setDefaultsOnInsert: true },
-      );
-    } else memory.repositories.set(saved._id, saved);
-    ok(res, saved);
-  } catch (e) {
-    next(e);
-  }
-});
 app.get('/api/repositories', withAuth, async (req, res, next) => {
   try {
     const repositories = dbReady

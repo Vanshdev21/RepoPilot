@@ -20,16 +20,22 @@ async function githubApi(path, token, options = {}) {
   return body;
 }
 
-function parseRepositoryUrl(url) {
+function parseRepositoryUrl(value) {
+  const input = String(value || '').trim().replace(/\/$/, '').replace(/\.git$/, '');
+  if (!input) return null;
   try {
-    const parsed = new URL(url);
-    if (parsed.hostname !== 'github.com') return null;
-    const [, owner, name] = parsed.pathname.split('/');
-    if (!owner || !name) return null;
-    return { owner, name: name.replace(/\.git$/, '') };
-  } catch (_) {
-    return null;
-  }
+    if (input.includes('github.com')) {
+      const parsed = new URL(input.includes('://') ? input : `https://${input}`);
+      if (parsed.hostname !== 'github.com') return null;
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      if (parts.length < 2) return null;
+      return { owner: parts[0], name: parts[1] };
+    }
+    const [owner, name] = input.split('/');
+    if (owner && name && !input.includes('/')) return { owner, name };
+    if (owner && name && input.split('/').length === 2) return { owner, name };
+  } catch (_) {}
+  return null;
 }
 
 module.exports = { githubApi, parseRepositoryUrl };

@@ -25,21 +25,25 @@ function buildRepositoryFallback(repository, question, files) {
 async function answerRepositoryQuestion(repository, question, files, githubToken) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
-  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const configuredModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const models = [...new Set([configuredModel, 'gemini-2.5-flash'])].filter(model => !model.includes('3.8'));
   const context = files.map(file => `FILE ${file.path}\n${file.content.slice(0, 12000)}`).join('\n\n');
   const prompt = `You are RepoPilot's repository engineering assistant. Answer from the supplied repository context only. Repository: ${repository.fullName}. Explain architecture, code behavior, tech stack, dependencies, and tradeoffs clearly. Admit when the repository context is insufficient.\n\nRepository context:\n${context}\n\nUser question:\n${question}`;
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } })
-  });
-  const body = await response.json();
-  if (!response.ok) {
-    if (body.error?.status === 'INVALID_ARGUMENT' || response.status === 400 || response.status === 401) {
-      return buildRepositoryFallback(repository, question, files);
+  let lastError = '';
+  for (const model of models) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } })
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      lastError = body.error?.message || `Gemini model ${model} failed`;
+      continue;
     }
-    throw new Error(body.error?.message || 'Gemini API request failed');
+    const answer = body.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim();
+    if (answer) return answer;
   }
-  return body.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('').trim() || buildRepositoryFallback(repository, question, files);
+  throw new Error(lastError || 'Gemini API request failed');
 }
 
 async function runCommand(command, args, options = {}) {

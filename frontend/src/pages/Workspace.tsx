@@ -22,8 +22,20 @@ export default function Workspace() {
     return body.data
   }
   async function connect(repositoryUrl = url) {
+    const normalizedUrl = String(repositoryUrl || '').trim()
+    let validRepository = /^[^\s/]+\/[^\s/]+(?:\.git)?$/.test(normalizedUrl)
+    if (!validRepository && /^https?:\/\//i.test(normalizedUrl)) {
+      try {
+        const parsed = new URL(normalizedUrl)
+        validRepository = parsed.hostname === 'github.com' && parsed.pathname.split('/').filter(Boolean).length >= 2
+      } catch (_) { validRepository = false }
+    }
+    if (!validRepository) {
+      setMessage('Enter a repository as owner/repository or a GitHub URL.')
+      return
+    }
     setBusy(true); setMessage('Connecting repository...')
-    try { const connected = await request('/repositories/connect', { method: 'POST', body: JSON.stringify({ repositoryUrl }) }); setRepository(connected); setIssues(await request(`/repositories/${connected._id}/issues?perPage=10`)); setMessage(`${connected.fullName} connected`) }
+    try { const connected = await request('/repositories/connect', { method: 'POST', body: JSON.stringify({ repositoryUrl: normalizedUrl }) }); setRepository(connected); setIssues(await request(`/repositories/${connected._id}/issues?perPage=10`)); setMessage(`${connected.fullName} connected`) }
     catch (error: any) { setMessage(error.message) } finally { setBusy(false) }
   }
   async function enableAgent(autoApprove = false) {
